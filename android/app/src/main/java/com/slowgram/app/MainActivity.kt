@@ -154,6 +154,9 @@ class MainActivity : Activity() {
                 handleNavigation(url)
 
             override fun onPageFinished(view: WebView, url: String?) {
+                // Diagnostic (always logged, before the host guard) so on-device
+                // URL/redirect issues are visible in Logcat.
+                Log.d(TAG, "[nav] onPageFinished url=$url viewUrl=${view.url}")
                 if (injector.isEngineHost(url) || injector.isEngineHost(view.url)) {
                     if (!pageLoadCompleted) {
                         pageLoadCompleted = true
@@ -182,8 +185,9 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun handleNavigation(url: String): Boolean =
-        when (injector.decide(url)) {
+    private fun handleNavigation(url: String): Boolean {
+        Log.d(TAG, "[nav] decide url=$url")
+        return when (injector.decide(url)) {
             EngineInjector.Decision.StayInWebView -> false
             EngineInjector.Decision.OpenExternally -> {
                 try {
@@ -195,6 +199,7 @@ class MainActivity : Activity() {
             }
             EngineInjector.Decision.Block -> true
         }
+    }
 
 
 

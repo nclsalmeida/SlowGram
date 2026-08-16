@@ -349,7 +349,13 @@
       fire: function (type) { loc.dispatchEvent({ type: type }); },
       setPathname: function (p) { loc.pathname = p; },
       dispatchPopstate: function () { (loc._window || loc).dispatchEvent({ type: 'popstate' }); },
-      dispatchHashchange: function () { (loc._window || loc).dispatchEvent({ type: 'hashchange' }); }
+      dispatchHashchange: function () { (loc._window || loc).dispatchEvent({ type: 'hashchange' }); },
+      // Navigation seam used by the host boot script (first-use login
+      // forward): records the URL instead of navigating so tests can assert
+      // the redirect happened.
+      lastNavigate: null,
+      replace: function (url) { loc.lastNavigate = url; },
+      assign: function (url) { loc.lastNavigate = url; }
     };
     return loc;
   }

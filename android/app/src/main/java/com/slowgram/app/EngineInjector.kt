@@ -117,6 +117,12 @@ class EngineInjector(
 
     // Kept for wiring convenience in host code that still holds a WebView ref.
     fun injectIfNeeded(webView: WebView) {
-        beginInjection()?.let { webView.evaluateJavascript(it, null) }
+        val script = beginInjection()
+        if (script != null) {
+            android.util.Log.d("SlowGram", "[inject] evaluating engine+boot (${script.length} chars)")
+            webView.evaluateJavascript(script, null)
+        } else {
+            android.util.Log.d("SlowGram", "[inject] skipped (guard)")
+        }
     }
 }

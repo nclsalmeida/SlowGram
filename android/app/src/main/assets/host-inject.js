@@ -36,6 +36,15 @@
    *    `xpqajaz`+`xtijo5x` matches exactly the 9 loaded reel items (all
    *    826px tall); `xtijo5x` alone also hits 93px video wrappers and
    *    `xpqajaz` alone also hits the caption blocks, so BOTH must match.
+   *
+   * 4. First-use experience: Instagram's logged-out landing page (the
+   *    "Compartilhe momentos…" interstitial with an "Abrir Instagram"
+   *    button) is useless inside a WebView — the button hands off to the
+   *    native app, which we deliberately block. Auto-forward logged-out
+   *    users straight to the login screen instead of making them tap
+   *    "Entrar ou cadastrar-se" manually. Text-based detection (no fragile
+   *    class names); guarded so it never loops on the auth routes and only
+   *    fires when the interstitial is actually present.
    */
   try {
     var style = document.createElement('style');
@@ -46,6 +55,52 @@
       'div[class*="xpqajaz"][class*="xtijo5x"] { padding-bottom: 93px !important; }';
     (document.head || document.documentElement).appendChild(style);
   } catch (e) { /* cosmetic only */ }
+
+  // 4. First-use: auto-forward the logged-out interstitial to the login
+  //    screen. The interstitial renders ASYNCHRONOUSLY (the body is empty at
+  //    onPageFinished), so detection is reactive: a MutationObserver re-checks
+  //    the rendered text until the open-app button appears, then forwards.
+  //    Fail-soft: if detection never matches (login page, logged-in feed,
+  //    changed copy), the user still sees the page with the manual
+  //    "Entrar ou cadastrar-se" link — nothing breaks. Loop-guard: never
+  //    run on auth routes and never more than once per page.
+  try {
+    var path = (window.location && window.location.pathname) || '';
+    var alreadyAuth =
+      path.indexOf('/accounts/') === 0 || path.indexOf('/auth/') === 0;
+
+    function tryForward() {
+      if (window.__slowgramLoginRedirected) { return; }
+      var bodyText = document.body ? document.body.innerText || '' : '';
+      // Detection tolerant of how the page splits the copy across elements:
+      // 'Entrar ou cadastrar-se' may read as 'Entrar ou cadastrar-se',
+      // 'Entrar', 'ou', 'cadastrar-se' (separate links), 'Log in', 'Sign up'.
+      var isInterstitial =
+        /Entrar\s*ou\s*cadastrar|Log\s*in|Sign\s*up|Cadastre-se|Cadastrar/i.test(bodyText);
+      var hasOpenAppButton =
+        /Abrir Instagram|Open Instagram|Use the app|Usar o app/i.test(bodyText);
+      if (isInterstitial && hasOpenAppButton) {
+        window.__slowgramLoginRedirected = true;
+        if (window.console && console.log) {
+          console.log('[SlowGram-boot] first-use: forwarded logged-out page to login');
+        }
+        window.location.replace('https://www.instagram.com/accounts/login/');
+      }
+    }
+
+    // First check immediately, then react to DOM mutations. Bounded: the
+    // observer is disconnected once the forward fires, and the check itself
+    // is cheap (innerText on a small landing page).
+    tryForward();
+    if (!alreadyAuth && !window.__slowgramLoginRedirected &&
+        typeof MutationObserver === 'function') {
+      var mo = new MutationObserver(function () { tryForward(); });
+      try { mo.observe(document.body || document.documentElement, {
+        childList: true, subtree: true, characterData: true
+      }); } catch (e) { /* fail-soft */ }
+      window.__slowgramInterstitialObserver = mo;
+    }
+  } catch (e) { /* fail-soft: manual login link remains */ }
 
   window.SlowGram.init();
 

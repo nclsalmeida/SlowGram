@@ -76,6 +76,85 @@ check('reels-caption-lift CSS present',
     style.textContent.indexOf('xtijo5x') !== -1 &&
     style.textContent.indexOf('padding-bottom: 93px') !== -1);
 
+// ---- first-use login forward (interstitial auto-redirect) -------------------
+// The logged-out landing interstitial ("Abrir Instagram" + "Entrar ou
+// cadastrar-se") is useless inside the WebView (its button hands off to the
+// native app, which we block). The boot script must auto-forward to the
+// login screen — but never on auth routes and never more than once.
+// The redirect is asserted via FakeLocation.lastNavigate (the harness
+// records instead of navigating).
+var interstitialBody = FakeElement('body', {}, []);
+interstitialBody.innerText = 'Compartilhe momentos do dia a dia apenas com seus' +
+  ' amigos próximos. Abrir Instagram Entrar ou cadastrar-se from Meta';
+
+// Each case simulates a FRESH page load: the per-page injection guard
+// (__slowgramInjected, asserted above) is reset so the boot body actually
+// runs — exactly what a new document does in the WebView.
+// FakeMutationObserver never fires on its own: tests drive the observer
+// callback manually to simulate the async interstitial rendering.
+
+// Case 1a: interstitial ALREADY rendered at boot -> forwards immediately.
+win.__slowgramInjected = false;
+win.__slowgramLoginRedirected = undefined;
+loc.lastNavigate = null;
+loc.setPathname('/');
+doc.body.innerText = interstitialBody.innerText;
+eval(boot);
+check('interstitial already rendered -> immediate forward',
+  loc.lastNavigate === 'https://www.instagram.com/accounts/login/' &&
+    win.__slowgramLoginRedirected === true);
+
+// Case 1b: interstitial renders AFTER boot (async, the real on-device
+// case: body empty at onPageFinished) -> observer reacts to the mutation.
+win.__slowgramInjected = false;
+win.__slowgramLoginRedirected = undefined;
+loc.lastNavigate = null;
+loc.setPathname('/');
+doc.body.innerText = '';                     // empty at boot, like on-device
+var obsBefore = FakeMutationObserver.instances.length;
+eval(boot);
+check('no forward while body empty', loc.lastNavigate === null);
+check('observer armed for late render',
+  FakeMutationObserver.instances.length === obsBefore + 1);
+doc.body.innerText = interstitialBody.innerText;   // interstitial renders now
+var obs = FakeMutationObserver.instances[FakeMutationObserver.instances.length - 1];
+obs.callback([{ type: 'childList' }]);
+check('late render -> forward on mutation',
+  loc.lastNavigate === 'https://www.instagram.com/accounts/login/');
+
+// Case 2: already on an auth route -> never forwards (no loop) and never
+// arms the observer.
+win.__slowgramInjected = false;
+win.__slowgramLoginRedirected = undefined;
+loc.lastNavigate = null;
+loc.setPathname('/accounts/login/');
+doc.body.innerText = 'Log in to Instagram';  // "Log in" alone must NOT trigger
+var obsBefore2 = FakeMutationObserver.instances.length;
+eval(boot);
+check('no forward on auth route (loop guard)', loc.lastNavigate === null);
+check('no observer armed on auth route',
+  FakeMutationObserver.instances.length === obsBefore2);
+
+// Case 3: logged-in surface (no interstitial) -> never forwards.
+win.__slowgramInjected = false;
+win.__slowgramLoginRedirected = undefined;
+loc.lastNavigate = null;
+loc.setPathname('/');
+doc.body.innerText = 'Home feed';
+eval(boot);
+check('no forward on normal pages', loc.lastNavigate === null);
+
+// Case 4: double-injection on the SAME interstitial page -> forwards once.
+win.__slowgramInjected = false;
+win.__slowgramLoginRedirected = undefined;
+loc.lastNavigate = null;
+loc.setPathname('/');
+doc.body.innerText = 'Abrir Instagram Entrar ou cadastrar-se';
+eval(boot);          // runs: interstitial detected -> forwards, flag set
+eval(boot);          // same page: guard -> no-op
+check('forward happens exactly once per page',
+  loc.lastNavigate === 'https://www.instagram.com/accounts/login/');
+
 // ---- double-injection guard + listener hygiene ------------------------------
 // The engine binds visibilitychange twice on the document by design
 // (lifecycle clock + overlay). The guard must keep that count stable on a
