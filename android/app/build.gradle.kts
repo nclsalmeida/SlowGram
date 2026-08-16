@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -28,6 +30,39 @@ tasks.named("preBuild") {
     dependsOn(copySlowGramEngine)
 }
 
+// ---------------------------------------------------------------------------
+// Release signing — read from android/keystore.properties (gitignored, never
+// committed). When the file is absent (e.g. a fresh clone without the
+// keystore), assembleRelease FAILS with a clear message instead of silently
+// producing an unsigned APK. assembleDebug is never affected.
+// ---------------------------------------------------------------------------
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+
+// Release signing gate: a missing keystore.properties fails loudly before
+// packaging instead of silently producing an unsigned APK. Wired as a
+// dependency of assembleRelease only — assembleDebug is never affected.
+val validateReleaseSigning by tasks.registering {
+    doFirst {
+        check(keystorePropertiesFile.exists()) {
+            "keystore.properties not found — see README section \"Assinatura\". " +
+                "Release signing is mandatory; the build refuses to produce an unsigned APK."
+        }
+        check(file(keystoreProperties.getProperty("storeFile")).exists()) {
+            "Keystore file not found at \"${keystoreProperties.getProperty("storeFile")}\" " +
+                "(from keystore.properties). Fix the path or restore the keystore from backup."
+        }
+    }
+}
+
+tasks.matching { it.name == "assembleRelease" }.configureEach {
+    dependsOn(validateReleaseSigning)
+}
+
 android {
     namespace = "com.slowgram.app"
     compileSdk = 36
@@ -38,6 +73,26 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
+    }
+
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
     }
 
     compileOptions {
