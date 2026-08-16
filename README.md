@@ -37,7 +37,7 @@ oculto** (background ≥ 5 min zera a sessão — o engine não te engana).
 
 O engine é validado por uma suíte própria de **930 assertions** no Node
 (`test/slowgram.test.js`; **851 no harness de browser** — mesma suíte, zero
-dependências), mais o E2E do boot do host (**10/10**) e os testes JVM do
+dependências), mais o E2E do boot do host (**18/18**) e os testes JVM do
 wrapper (**16**, nas variantes debug e release), incluindo verificação em
 dispositivo real (ver "Validação em dispositivo").
 
@@ -230,17 +230,14 @@ Níveis de validação usados neste projeto (nunca confundir um com o outro):
 
 | Nível | O que prova | Status |
 |-------|-------------|--------|
-| **Testes automatizados** | o engine roda verde sob mocks (Node 930 / browser 851) + boot do host (10) + wrapper JVM (16, debug e release) | ✅ executado nesta auditoria |
+| **Testes automatizados** | o engine roda verde sob mocks (Node 930 / browser 851) + boot do host (18) + wrapper JVM (16, debug e release) | ✅ executado nesta auditoria |
 | **Browser/harness** | `test/harness.html` em browser puro (sem servidor/npm) — Edge headless **851/851** | ✅ executado |
 | **Chrome Android** | motor REAL injetado em instagram.com no Android Chrome (UAT Fase 5): clamps exibidos, saturação em 13 wrappers, volume 0.5 em 6 vídeos (confirmação audível), reset 6 min (280s → 2s), `/direct/` 100% nativo, pill "3 min" | ✅ executado (05-UAT) |
-| **Android WebView** | wrapper completo no WebView do Pixel: login real, feed/Reels renderizando, degradação 3/7/12 min observada pelo usuário, shims (banner/wordmark/legenda), botão voltar e posição do pill — verificados via DOM/CDP + pixels + confirmação visual | ✅ executado (manual/observacional, pós-milestone) |
+| **Android WebView** | wrapper completo no WebView do Pixel, **checklist formal de 6 itens executado (2026-08-16)**: login real, home renderizada, /reels/ degradando aos 3 min (pill "3 min" visível), /direct/ 100% nativo (timestamp "4 min" confirmado como nativo por posição no DOM), background 6+ min zera o relógio (sem pill ao voltar, sem crash), sessão mantida após background (perfil logado) — além dos shims e do forward de primeiro uso (D-30) | ✅ executado (checklist completo, ver abaixo) |
 | **Dispositivo físico** | qualquer item acima rodado num aparelho real | ✅ Pixel 7 Pro |
 
 **Validações AINDA NÃO realizadas (honesto — nada abaixo foi executado):**
 
-- Checklist sistemático dos 6 itens **dentro do WebView** — a UAT da Fase 5
-  rodou em **Android Chrome**; a validação WebView foi manual/observacional,
-  não um run formal do checklist.
 - **Kill switch** exercitado em aparelho (só harness).
 - Lever de **buffer** em aparelho (off por default).
 - **iOS** — os clamps WebKit são spec, não validação em superfície real.
@@ -253,7 +250,7 @@ O wrapper diferencia explicitamente o que cada nível prova. **O APK não é
 "funcional" só porque o build e os testes JVM passam.**
 
 1. **Testes automatizados** — 930 asserts do engine (Node; 851 no harness de
-   browser) + E2E do boot do host (`test/host-inject.test.js`, Node, 10/10) +
+   browser) + E2E do boot do host (`test/host-inject.test.js`, Node, 18/18) +
    testes JVM do wrapper (16, nas variantes debug e release: política de
    navegação, guard de injeção, integridade do asset, criação/estado do
    WebView via Robolectric, gate do bridge por debug).
@@ -267,12 +264,14 @@ O wrapper diferencia explicitamente o que cada nível prova. **O APK não é
 Checklist de dispositivo (status real, 2026-08):
 
 ```text
-[x] WebView abre instagram.com e renderiza (nível 3) — Pixel 7 Pro
-[x] Login funciona dentro do WebView (nível 4) — Pixel 7 Pro
-[x] /reels/ degrada em 3 min (saturação 0.85) (nível 5) — WebView (observacional)
-[x] /direct/ 100% nativo, sem overlay (nível 5) — WebView
-[ ] Background 6+ min zera o relógio — validado em Chrome Android (280s→2s);
-    pendente de re-teste sistemático no WebView
+[x] WebView abre instagram.com e renderiza (nível 3) — Pixel 7 Pro, 2026-08-16
+[x] Login funciona dentro do WebView (nível 4) — Pixel 7 Pro, login manual
+[x] /reels/ degrada em 3 min (saturação 0.85) (nível 5) — pill "3 min" visível
+[x] /direct/ 100% nativo, sem overlay (nível 5) — DM limpa; "4 min" é timestamp
+    nativo (posição no DOM ≠ pill do SlowGram)
+[x] Background 6+ min zera o relógio (nível 5) — sem crash; sem pill ao voltar
+    (contador zerado, re-acumula só com Reels novos)
+[x] Voltar do background mantém a sessão (nível 4) — perfil logado após 6+ min
 [ ] Kill switch em aparelho (só harness)
 [ ] Buffer lever em aparelho (off por default)
 [ ] iOS (qualquer superfície)
