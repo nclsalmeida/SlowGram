@@ -115,9 +115,16 @@ fecha o app.
 
 Pré-requisitos: **JDK 17** (não mais — o Gradle 8.13 embutido no wrapper não
 parseia JDKs mais novos, ex. Java 25: `IllegalArgumentException: 25.0.2`) e
-Android SDK (platform 36, build-tools 35+; o caminho local fica em
-`android/local.properties`, que é gitignored — cada máquina aponta para o
-seu próprio SDK).
+Android SDK (platform 36, build-tools 35+).
+
+O caminho do SDK é config de máquina (gitignored) — um clone novo não vem
+com `android/local.properties`. Escolha **uma** das duas opções:
+
+- **opção 1:** criar `android/local.properties` com `sdk.dir=<caminho-do-sdk>`
+  (ex. `sdk.dir=C\:\\Users\\seu-usuario\\AppData\\Local\\Android\\Sdk`);
+- **opção 2:** exportar `ANDROID_HOME=<caminho-do-sdk>` no ambiente **antes**
+  de rodar o gradlew (é o que a CI faz; sem isso o build falha com
+  `SDK location not found`).
 
 ```text
 git clone <repo-url>
