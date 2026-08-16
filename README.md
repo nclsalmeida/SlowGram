@@ -94,13 +94,9 @@ fecha o app.
    (`SlowGram-vX.Y.Z.apk`) — ou do artefato do workflow *android-release*.
 2. Toque no arquivo para instalar.
 
-> ⚠️ **APKs não assinados não instalam em Android 14+.** O build de release
-> atual produz um APK **não assinado** (MVP), que o Android rejeita com
-> `INSTALL_PARSE_FAILED_NO_CERTIFICATES`. Para instalar hoje, use um APK
-> assinado — ex.: o `assembleDebug` (assinado com a chave de debug) ou o
-> `slowgram-vX.Y.Z-debug-signed.apk` gerado por apksigner com a chave de
-> debug. A assinatura de produção via GitHub Secrets está no roteiro (ver
-> "Assinatura (futuro)").
+> ✅ **O release é assinado** (v2) e instala em Android 14+ sem flags extras.
+> A assinatura é obrigatória por design — `assembleRelease` falha sem
+> `keystore.properties` (ver "Assinatura").
 3. Se o Android pedir permissão, habilite **"Instalar aplicativos
    desconhecidos"** para a fonte que você usou (navegador/arquivos):
    *Ajustes → Apps → (fonte) → Permitir instalação de apps desconhecidos*.
@@ -132,7 +128,7 @@ cd SlowGram/android
 JAVA_HOME=<caminho-do-jdk-17> ./gradlew test          # testes do wrapper (JVM/Robolectric)
 JAVA_HOME=<caminho-do-jdk-17> ./gradlew assembleDebug # APK de debug
 JAVA_HOME=<caminho-do-jdk-17> ./gradlew assembleRelease
-# APK: android/app/build/outputs/apk/release/app-release-unsigned.apk
+# APK assinado: android/app/build/outputs/apk/release/app-release.apk
 ```
 
 O engine (`src/slowgram.js`) é copiado para os assets em cada build — o
@@ -155,13 +151,55 @@ node .freebuff/serve.js   # serve a raiz em http://127.0.0.1:8080
 `.freebuff/` (servidor de preview, scripts de depuração CDP, screenshots e
 logs de sessão) é material de desenvolvimento e **não é versionado**.
 
-### Assinatura (futuro)
+### Assinatura
 
-O MVP gera APK **não assinado**. A arquitetura está pronta para assinatura
-via GitHub Secrets: adicione `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`,
-`KEY_ALIAS` e `KEY_PASSWORD` ao repositório e um `keystore.properties`
-local (no `.gitignore`) apontando para o keystore. Nenhuma keystore ou senha
-entra no repositório.
+O build de release agora é **obrigatoriamente assinado** (desde a
+implementação do item "Assinatura de Release"): o `assembleRelease` **falha**
+se `android/keystore.properties` não existir — não é um bug, é um guard
+proposital (`validateReleaseSigning` no `build.gradle.kts`) para nunca gerar
+um APK release silenciosamente unsigned. O `assembleDebug` não é afetado
+(usa a chave de debug do SDK).
+
+**Gerar a keystore de release (uma única vez, local):**
+
+```bash
+keytool -genkeypair -v -alias slowgram-release -keyalg RSA -keysize 2048 \
+  -sigalg SHA256withRSA -validity 9125 -storetype PKCS12 \
+  -keystore <caminho>/slowgram-release.jks
+```
+
+- `-validity 9125` = **25 anos** (padrão Play Store; evita regerar).
+- **Guarde a keystore + senha em um cofre/backup separado da máquina** —
+  perdê-la significa que qualquer versão futura do app é um app diferente
+  aos olhos do Android/Play Store (impossível atualizar por cima).
+- A keystore nunca é commitada (`*.jks`/`*.keystore` no `.gitignore`).
+
+**Builds assinados na máquina de dev:** crie `android/keystore.properties`
+(no `.gitignore`) com:
+
+```properties
+storeFile=<caminho-absoluto-ou-relativo-ao-modulo-app-da-keystore>
+storePassword=<senha-da-keystore>
+keyAlias=slowgram-release
+keyPassword=<senha-da-key>
+```
+
+**CI (GitHub Actions)** — o workflow `android-release` reconstrói a
+assinatura a partir de **4 secrets** do repositório (nenhum valor entra no
+código — só `${{ secrets.* }}`):
+
+| Secret | O que é |
+|---|---|
+| `KEYSTORE_BASE64` | a keystore em base64 — ex.: `base64 -w0 slowgram-release.jks` |
+| `KEYSTORE_PASSWORD` | senha da keystore |
+| `KEY_ALIAS` | `slowgram-release` |
+| `KEY_PASSWORD` | senha da key |
+
+O workflow decodifica a keystore para `app/release.jks`, reconstrói o
+`keystore.properties` no runner, builda `assembleRelease` e **verifica a
+assinatura com `apksigner` antes de publicar** (falha se o APK não estiver
+assinado). Se qualquer secret estiver ausente, o passo de reconstrução
+falha com `::error::` — o release nunca publica APK sem assinatura.
 
 ## Privacidade
 
@@ -208,7 +246,6 @@ Níveis de validação usados neste projeto (nunca confundir um com o outro):
 - **iOS** — os clamps WebKit são spec, não validação em superfície real.
 - **CPU < 1%** do observer: estimativa estrutural (yield-at-cap 200/frame,
   síntese 5k mutações/s no harness), **não medida** em aparelho.
-- **Release signing** — o APK release atual é não assinado (ver "Assinatura").
 
 ## Testes — níveis (importante)
 
