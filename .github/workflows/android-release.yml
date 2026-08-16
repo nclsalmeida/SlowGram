@@ -1,9 +1,11 @@
 # SlowGram Android release — runs on v* tags.
 #
-# MVP: produces an UNSIGNED release APK (sideload-friendly) plus a GitHub
-# Release. Signing is intentionally not configured yet; the architecture is
-# ready for it (see README "Assinatura") via GitHub Secrets — no keystore or
-# password ever enters this repository.
+# Produces a SIGNED release APK (installable on Android 14+ without flags)
+# plus a GitHub Release. The keystore never enters the repository: it is
+# decoded from the KEYSTORE_BASE64 secret at build time and keystore.properties
+# is reconstructed from secrets (KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD).
+# The build fails if signing secrets are missing (assembleRelease is
+# mandatory-signed by design — see android/app/build.gradle.kts).
 name: android-release
 
 on:
@@ -28,7 +30,6 @@ jobs:
           java-version: "17"
 
       # Engine integrity: the wrapper must never ship a modified engine.
-      # (878 assertions — the engine's own suite, untouched.)
       - name: Engine suite (Node)
         run: node test/slowgram.test.js
 
@@ -37,19 +38,49 @@ jobs:
       - name: Host-boot E2E (Node)
         run: node test/host-inject.test.js
 
-      - name: Android unit tests + release build
+      # Reconstruct signing material from GitHub Secrets (never committed):
+      # the keystore.properties the build script reads, plus the keystore
+      # itself, decoded from base64.
+      - name: Reconstruct signing keystore from secrets
+        working-directory: android
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_BASE64" || { echo "::error::missing secret KEYSTORE_BASE64"; exit 1; }
+          test -n "$KEYSTORE_PASSWORD" || { echo "::error::missing secret KEYSTORE_PASSWORD"; exit 1; }
+          test -n "$KEY_ALIAS" || { echo "::error::missing secret KEY_ALIAS"; exit 1; }
+          test -n "$KEY_PASSWORD" || { echo "::error::missing secret KEY_PASSWORD"; exit 1; }
+          # storeFile is resolved relative to the app module (file() in
+          # build.gradle.kts), so the keystore lives at app/release.jks and
+          # storeFile is just release.jks.
+          mkdir -p app
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > app/release.jks
+          printf 'storeFile=release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > keystore.properties
+
+      - name: Android unit tests + signed release build
         working-directory: android
         run: ./gradlew test assembleRelease
+
+      # The build is mandatory-signed; verify it really is before publishing.
+      - name: Verify APK signature
+        working-directory: android
+        run: |
+          test -f app/build/outputs/apk/release/app-release.apk || { echo "::error::app-release.apk not found"; exit 1; }
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose app/build/outputs/apk/release/app-release.apk | grep -E "v[12] scheme" | grep -q true || { echo "::error::APK is not signed"; exit 1; }
 
       - name: Upload APK (artifact)
         uses: actions/upload-artifact@v4
         with:
           name: slowgram-apk
-          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          files: android/app/build/outputs/apk/release/app-release.apk
           generate_release_notes: true
