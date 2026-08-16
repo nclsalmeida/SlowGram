@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SlowGram — detection demo (DETC-07)</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; margin: 2rem; color: #222; }
+    #verdict { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 1.05rem;
+      background: #f6f6f6; border: 1px solid #ddd; border-radius: 6px; padding: 1rem 1.2rem;
+      margin: 1rem 0; white-space: pre-line; }
+    #routeStatus { color: #555; margin-bottom: 1rem; }
+    button { font-size: 1rem; padding: 0.5rem 1rem; cursor: pointer; }
+    .fail { color: #b00; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>SlowGram — demo de detecção de contexto (DETC-07)</h1>
+  <p>O motor roda contra um DOM fake com o formato do Instagram (fixtures + mocks) e renderiza o veredito de detecção ao vivo — sem framework, sem build, sem rede.</p>
+  <div id="verdict">carregando…</div>
+  <div id="routeStatus"></div>
+  <button id="flip" type="button">Simular navegação para /direct/</button>
+
+  <!-- Documented five-script load order (02-04-PLAN.md Task 2): engine →
+       harness (fakes) → fixtures (DOM shapes) → mocks (tree builder) →
+       inline demo driver. -->
+  <script src="src/slowgram.js"></script>
+  <script src="test/harness.js"></script>
+  <script src="test/fixtures/instagram-shapes.js"></script>
+  <script src="test/dom-mocks/instagram-mock.js"></script>
+  <script>
+    // Containment observability (mirrors harness.html): an uncaught demo or
+    // engine error renders as a red verdict line — never a blank page.
+    window.addEventListener('error', function (event) {
+      var v = document.getElementById('verdict');
+      if (!v) { return; }
+      v.textContent = 'DEMO ERROR: ' + (event && event.message ? event.message : 'unknown error');
+      v.className = 'fail';
+    });
+    (function () {
+      'use strict';
+      var verdictEl = document.getElementById('verdict');
+      var routeEl = document.getElementById('routeStatus');
+      var loc;
+
+      // Live verdict panel — values read from the engine itself (never
+      // literals): context via getState, registry count via _registrySize,
+      // health via getSelectorHealth, threshold via getConfig.
+      function verdict() {
+        var st = SlowGram.getState();
+        var health = SlowGram.getSelectorHealth();
+        var cfg = SlowGram.getConfig();
+        verdictEl.textContent = [
+          'Context: ' + st.context,
+          'Registered videos: ' + SlowGram._registrySize(),
+          'Selector health: ' + health.status,
+          'Drift threshold: ' + cfg.health.driftThreshold
+        ].join('\n');
+        var ws = SlowGram._getWatcherState();
+        routeEl.textContent = 'Pathname: ' + (loc ? loc.pathname : 'n/a') +
+          ' — observer ' + (ws.connected ? 'connected' : 'disconnected');
+      }
+
+      try {
+        // Feed shape: the loggedIn evidence (loop/autoplay/dialog) plus the
+        // live-dump feed video count, so the demo feed is Instagram-shaped.
+        var shape = {};
+        var base = instaShapes.SHAPES.loggedIn;
+        for (var k in base) {
+          if (Object.prototype.hasOwnProperty.call(base, k)) { shape[k] = base[k]; }
+        }
+        shape.videos = 4;
+        var feed = instaMocks.buildReelsFeed(shape);          // [role="main"] + 4 videos with loop/autoplay
+        var dialog = instaMocks.buildDialogRoot(shape);       // [role="dialog"] with a video (D-03)
+        var wrapper = FakeElement('div', {}, [feed]);
+        if (dialog) { wrapper.appendChild(dialog); }
+
+        var doc = FakeDocument({ visibilityState: 'visible', root: wrapper });
+        var win = FakeWindow();
+        loc = FakeLocation('/reels/');
+        loc._window = win;                                    // popstate/hashchange dispatch target
+        win.location = loc;
+        var raf = FakeRAF();
+        var clock = FakeClock(1000000);
+
+        SlowGram.init({
+          clock: clock,
+          document: doc,
+          window: win,
+          MutationObserver: FakeMutationObserver,
+          requestAnimationFrame: raf.request
+        });
+
+        // Detection spine, deterministically: a mutation record adds a video
+        // to the feed → one rAF frame drains the batch → registry + health.
+        var observer = FakeMutationObserver.instances[FakeMutationObserver.instances.length - 1];
+        var extra = FakeVideoElement('video', { src: 'blob:https://www.instagram.com/demo-extra', loop: '' });
+        observer.record([{ type: 'childList', addedNodes: [extra], target: feed }]);
+        raf.flush();
+
+        verdict();
+
+        // Route-flip demo (D-06/D-07): /direct/ is preserved — context flips
+        // to SOCIAL and the observer disconnects; the registry is retained.
+        document.getElementById('flip').addEventListener('click', function () {
+          loc.setPathname('/direct/');
+          loc.dispatchPopstate();
+          verdict();
+        });
+      } catch (err) {
+        verdictEl.textContent = 'DEMO ERROR: ' + (err && err.message ? err.message : String(err));
+        verdictEl.className = 'fail';
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SlowGram</string>
+
+    <string name="settings_title">Configurações e privacidade</string>
+    <string name="settings_privacy_title">Privacidade</string>
+    <string name="settings_privacy_body">O SlowGram não coleta dados pessoais: sem analytics, sem Firebase, sem trackers e sem servidor obrigatório — tudo roda localmente no aparelho. A única permissão é INTERNET, e a sessão do Instagram fica nos cookies locais do app (nunca enviados ao SlowGram). Backup em nuvem desativado.</string>
+
+    <string name="about_title">Sobre o SlowGram</string>
+    <string name="about_intro">O SlowGram é um experimento gratuito e open-source que reduz de forma suave o consumo compulsivo de Reels. Ele roda o Instagram Web dentro de um WebView e aplica uma degradação gradual e reversível ao feed depois de alguns minutos de uso contínuo.</string>
+    <string name="about_objective_title">Objetivo</string>
+    <string name="about_objective">Reduzir o uso excessivo e compulsivo sem bloquear nem gerar culpa. A desaceleração é imperceptível no início, escala lentamente e reverte totalmente quando você sai dos Reels.</string>
+    <string name="about_open_source_title">Open source</string>
+    <string name="about_open_source">O SlowGram é licenciado sob MIT. Sem analytics, sem trackers, sem servidores, sem SDKs de terceiros. Leia e audite tudo no GitHub.</string>
+    <string name="about_github_button">Ver no GitHub</string>
+    <string name="about_disclaimer">O SlowGram não é afiliado, associado, autorizado ou patrocinado pela Meta Platforms, Inc. ou pelo Instagram. Instagram é uma marca da Meta Platforms, Inc.</string>
+    <string name="about_no_browser">Nenhum navegador encontrado para abrir o link.</string>
+
+    <string name="github_repo_url" translatable="false">https://github.com/slowgram/slowgram</string>
+
+</resources>

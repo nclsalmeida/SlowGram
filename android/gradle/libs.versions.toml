@@ -1,0 +1,16 @@
+# SlowGram Android wrapper — version catalog.
+# Pins verified against official docs (AGP 8.13.0 release notes, Sep 2025):
+#   - AGP 8.13 max API level 36.1, requires Gradle 8.13, JDK 17.
+[versions]
+agp = "8.13.2"
+kotlin = "2.2.20"
+junit = "4.13.2"
+robolectric = "4.14.1"
+
+[libraries]
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }

@@ -1,0 +1,55 @@
+# SlowGram Android release — runs on v* tags.
+#
+# MVP: produces an UNSIGNED release APK (sideload-friendly) plus a GitHub
+# Release. Signing is intentionally not configured yet; the architecture is
+# ready for it (see README "Assinatura") via GitHub Secrets — no keystore or
+# password ever enters this repository.
+name: android-release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Engine integrity: the wrapper must never ship a modified engine.
+      # (878 assertions — the engine's own suite, untouched.)
+      - name: Engine suite (Node)
+        run: node test/slowgram.test.js
+
+      # Host-boot E2E: the Android boot script must boot the real engine
+      # cleanly (regression guard for JS-string injection bugs).
+      - name: Host-boot E2E (Node)
+        run: node test/host-inject.test.js
+
+      - name: Android unit tests + release build
+        working-directory: android
+        run: ./gradlew test assembleRelease
+
+      - name: Upload APK (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: slowgram-apk
+          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          generate_release_notes: true

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<!--
+  SlowGram single-source contract (HARN-07): this page is the BROWSER host of
+  the shared suite. It loads the SAME engine, harness, and tests by path —
+  ../src/slowgram.js, harness.js, slowgram.test.js — and must NEVER embed a
+  copy of any of them. A duplicated/modified copy breaks the dual-host parity
+  contract (T-H01 structure-pins these three paths). Zero test dependencies:
+  no framework, no npm — the same constraint as the Node host.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SlowGram harness — browser host (single source: ../src/slowgram.js + harness.js + slowgram.test.js)</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; margin: 2rem; color: #222; }
+    table { border-collapse: collapse; margin-top: 1rem; }
+    th, td { border: 1px solid #999; padding: 4px 10px; text-align: left; }
+    th { background: #eee; }
+  </style>
+</head>
+<body>
+  <h1>SlowGram harness — browser host</h1>
+  <p>Same engine, harness, and tests as <code>node test/slowgram.test.js</code>, loaded via plain <code>&lt;script&gt;</code> tags in order engine &rarr; harness &rarr; tests.</p>
+  <div id="results"></div>
+
+  <script src="../src/slowgram.js"></script>
+  <script src="harness.js"></script>
+  <script>
+    // Containment observability (T-01-14): any uncaught engine/test error
+    // renders as a red FAIL row instead of leaving a blank page — a broken
+    // engine must show as a red table, not a silent failure.
+    window.addEventListener('error', function (event) {
+      try {
+        var container = document.getElementById('results');
+        if (!container || typeof renderResults !== 'function') { return; }
+        // Record the error as a failing assertion in the results table.
+        assert.ok(false, 'UNCAUGHT ERROR: ' + (event && event.message ? event.message : 'unknown error'));
+        renderResults('results');
+      } catch (err) {
+        // Never break the host page — the table render is best-effort.
+      }
+    });
+  </script>
+  <script src="slowgram.test.js"></script>
+</body>
+</html>
