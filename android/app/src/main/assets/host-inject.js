@@ -261,9 +261,13 @@
 
           var confirmed = false;
           try {
-            var live = document.querySelector(
+            var txt = '';
+            var regions = document.querySelectorAll(
               '[role="status"],[role="alert"],[aria-live]');
-            var txt = live ? (live.textContent || '') : '';
+            for (var ri = 0; ri < regions.length; ri++) {
+              var rt = regions[ri].textContent || '';
+              if (rt) { txt += rt + '\n'; }
+            }
             if (txt && txt !== lastLiveRegionText) {
               lastLiveRegionText = txt;
               // Diagnostic breadcrumb: the exact wording lands in Logcat so
@@ -385,9 +389,13 @@
           }
         }
 
-        var live = document.querySelector(
+        var txt = '';
+        var regions = document.querySelectorAll(
           '[role="status"],[role="alert"],[aria-live]');
-        var txt = live ? (live.textContent || '') : '';
+        for (var wi = 0; wi < regions.length; wi++) {
+          var wt = regions[wi].textContent || '';
+          if (wt) { txt += wt + '\n'; }
+        }
         if (!txt || txt === lastAnnouncerText) { return; }
         lastAnnouncerText = txt;
         var flat = txt.replace(/\s+/g, ' ').trim();
@@ -419,6 +427,42 @@
         }
       } catch (err) { /* best-effort watcher */ }
     }, 2000);
+
+    // Explicit deletion clicks (v1.1.2): the announcement watch above
+    // depends on Instagram ANNOUNCING the deletion - it often doesn't. So
+    // also arm on the ACTION itself: inside the story viewer (/stories*),
+    // clicking Excluir/Discard/Delete IS the intent; give their API ~3s,
+    // then land on a fresh home (the tray keeps a ghost ring until a
+    // reload). Exact-label match plus the /stories* path guard keep
+    // unrelated deletes (messages, comments - never under /stories*) out.
+    document.addEventListener('click', function (e) {
+      try {
+        var p0 = '';
+        try { p0 = window.location.pathname || ''; } catch (err) {}
+        if (p0.indexOf('/stories') !== 0) { return; }
+        var t0 = e.target;
+        var b0 = (t0 && typeof t0.closest === 'function')
+          ? t0.closest('button,[role="button"]')
+          : null;
+        if (!b0) { return; }
+        var label0 = ((b0.getAttribute && b0.getAttribute('aria-label')) ||
+          b0.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!/^(excluir|descartar|eliminar|delete|discard)$/i.test(label0)) {
+          return;
+        }
+        if (window.console && console.log) {
+          console.log('[SlowGram-boot] story delete clicked -> home in 3s');
+        }
+        setTimeout(function () {
+          try {
+            var nowD = Date.now();
+            if (nowD - lastLifecycleJumpAt < 5000) { return; }
+            lastLifecycleJumpAt = nowD;
+            sgJumpHome();
+          } catch (err) { /* fail-soft */ }
+        }, 3000);
+      } catch (err) { /* fail-soft */ }
+    }, true);
   } catch (e) { /* cosmetic only */ }
 
   window.SlowGram.init();
