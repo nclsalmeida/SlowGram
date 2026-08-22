@@ -520,6 +520,7 @@
     var sgStateProbeAt = 0;
     var sgVolOrig = new Map();
     var sgMirrorLogged = false;
+    var sgReinitDone = false;
     setInterval(function () {
       try {
         var el = document.documentElement;
@@ -609,6 +610,34 @@
                 cont.setAttribute('role', 'dialog');
                 if (window.console && console.log) {
                   console.log('[SlowGram-boot] reels overlay role=dialog planted');
+                }
+                // One-shot RE-INIT: the observer may already be connected to
+                // the wrong ([role=main]) root from an earlier context entry;
+                // connectWatcher skips while watcher.connected. init() is
+                // idempotent (teardown + fresh bind) - the fresh connect now
+                // sees BOTH roots (main + our planted dialog), scans every
+                // mounted video into the registry and lands current-phase
+                // levers through the ENGINE path as well.
+                if (!sgReinitDone) {
+                  sgReinitDone = true;
+                  setTimeout(function () {
+                    try {
+                      if (window.SlowGram &&
+                          typeof window.SlowGram.init === 'function') {
+                        if (window.console && console.log) {
+                          console.log('[SlowGram-boot] re-init to re-root observer');
+                        }
+                        window.SlowGram.init(fastReels
+                          ? { clock: { now: function () {
+                              return Date.now() * 60; } } }
+                          : undefined);
+                      }
+                    } catch (eR) {
+                      if (window.console && console.log) {
+                        console.log('[SlowGram-boot] re-init failed: ' + eR);
+                      }
+                    }
+                  }, 250);
                 }
               }
             }
