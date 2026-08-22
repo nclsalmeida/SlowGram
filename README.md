@@ -106,6 +106,19 @@ no Chrome mobile em instagram.com — falha idêntica fora do SlowGram:
 Corrigir esses itens exigiria remendar a página do Instagram por fora,
 o que viola os princípios do projeto. Reporte à Meta 😉
 
+**Proteções de Stories (v1.1.2)** — como o composer não dá nenhum
+feedback após postar (bug upstream acima), o wrapper adiciona duas
+salvaguardas próprias, ambas *fail-soft* e baseadas no rótulo do botão
+(PT/EN/ES — se a Meta mudar o texto, o comportamento original volta):
+
+- **Anti-duplicado**: toque em "Adicionar ao seu story" é capturado; os
+  seguintes, por 20s, são ignorados (mata o duplo-toque e o spam de
+  impaciência durante a janela morta de upload);
+- **Auto-retorno à home**: detectada a postagem, o wrapper aguarda o
+  composer fechar e recarrega uma home fresca — seus stories já aparecem.
+  Nunca interrompe um upload em andamento (só age com o botão fora do
+  DOM) e desiste em silêncio após ~60s se o composer travar (upstream).
+
 **Ajustes cosméticos (host, não engine)** — regras CSS injetadas pelo
 wrapper em `android/app/src/main/assets/host-inject.js`, verificadas em
 aparelho (Pixel 7 Pro, 2026-08), todas best-effort (se o Instagram mudar os

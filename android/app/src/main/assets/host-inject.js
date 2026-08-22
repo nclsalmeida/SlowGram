@@ -181,6 +181,79 @@
     }
   } catch (e) { /* fail-soft: manual login link remains */ }
 
+  // 5. Story-post guard (v1.1.2). Instagram's web composer gives NO
+  //    feedback after "Adicionar ao seu story" (on-device it hangs on
+  //    "Carregando..." forever — upstream bug, see README "Limitações
+  //    conhecidas"), so extra taps during the silent window post
+  //    DUPLICATE stories. Two fail-soft defenses, label-based (PT/EN/ES):
+  //    a) capture-phase click guard: swallow further story-post
+  //       activations for 20s after the first (double-taps + impatience);
+  //    b) once posted, poll for the composer to CLOSE and then jump to a
+  //       FRESH home (location.replace) so the new story ring is already
+  //       there — the site itself never refreshes it. Never interrupts an
+  //       upload (acts only after the button left the DOM); gives up
+  //       silently after ~60s if the composer hangs (upstream bug).
+  try {
+    var STORY_POST_LABEL =
+      /adicionar ao seu story|add to story|agregar a tu historia/i;
+    var STORY_COOLDOWN_MS = 20000;
+    var lastStoryPostAt = 0;
+
+    document.addEventListener('click', function (e) {
+      try {
+        var t = e.target;
+        var btn = (t && typeof t.closest === 'function')
+          ? t.closest('button,[role="button"]')
+          : null;
+        if (!btn) { return; }
+        var label = ((btn.getAttribute && btn.getAttribute('aria-label')) ||
+          btn.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!STORY_POST_LABEL.test(label)) { return; }
+
+        var now = Date.now();
+        if (now - lastStoryPostAt < STORY_COOLDOWN_MS) {
+          if (typeof e.preventDefault === 'function') { e.preventDefault(); }
+          if (typeof e.stopImmediatePropagation === 'function') {
+            e.stopImmediatePropagation();
+          }
+          if (window.console && console.log) {
+            console.log('[SlowGram-boot] story post debounced (cooldown)');
+          }
+          return;
+        }
+        lastStoryPostAt = now;
+        if (window.console && console.log) {
+          console.log('[SlowGram-boot] story post detected');
+        }
+
+        // b) auto-return to a fresh home once the composer closes.
+        var polls = 0;
+        var timer = setInterval(function () {
+          polls += 1;
+          var closed = true;
+          try { closed = !document.contains(btn); } catch (err) { closed = true; }
+          if (!closed) {
+            if (polls >= 40) { clearInterval(timer); }   // hung composer: give up
+            return;
+          }
+          clearInterval(timer);
+          var p = '';
+          try { p = window.location.pathname || ''; } catch (err) {}
+          // Only auto-jump when the user is still on the home/stories
+          // surface — never yank someone who navigated to a profile.
+          if (p === '/' || p.indexOf('/stories') === 0) {
+            try {
+              if (window.console && console.log) {
+                console.log('[SlowGram-boot] composer closed -> fresh home');
+              }
+              window.location.replace(window.location.origin + '/');
+            } catch (err) { /* fail-soft */ }
+          }
+        }, 1500);
+      } catch (err) { /* never break the page over the guard */ }
+    }, true);
+  } catch (e) { /* cosmetic only */ }
+
   window.SlowGram.init();
 
   try {
