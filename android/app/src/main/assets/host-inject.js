@@ -844,9 +844,14 @@
   } catch (e) { /* cosmetic only */ }
 
   // Init with the testing clock seam when the lever is armed (see top).
-  window.SlowGram.init(fastReels
-    ? { clock: { now: function () { return Date.now() * 60; } } }
-    : undefined);
+  // The plain init() branch is also an ASSET CONTRACT marker (JVM integrity
+  // test asserts this exact call shape - public API only).
+  if (fastReels) {
+    window.SlowGram.init({ clock: { now: function () {
+      return Date.now() * 60; } } });
+  } else {
+    window.SlowGram.init();
+  }
 
   try {
     var st = window.SlowGram.getState();
