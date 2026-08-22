@@ -282,6 +282,52 @@
     }, true);
   } catch (e) { /* cosmetic only */ }
 
+  // 6. Story-lifecycle announcer watch (v1.1.2). Instagram announces story
+  //    events in small aria-live/status regions. Reading THOSE nodes is
+  //    cheap (textContent of a tiny subtree — unlike body.innerText, no
+  //    full-page layout). A permanent 2s watcher reacts to:
+  //      - story DELETED  -> jump to a FRESH home (the SPA leaves a ghost
+  //        ring in the tray, and a composer opened right after deleting
+  //        inherits rotten state and fails to post — both cured by the
+  //        fresh load);
+  //      - story post FAILED -> fresh home too (same state reset).
+  //    Post SUCCESS stays owned by the guard above (it owns cooldown
+  //    context). All jumps are pathname-guarded (/ or /stories*) and rate-
+  //    limited; every step fail-soft.
+  try {
+    var STORY_DELETED_LABEL =
+      /((story|hist[oó]ria).{0,40}(exclu[íi]d[oa]|apagad[oa]|removid[oa]|deleted|removed))|((exclu[íi]d[oa]|apagad[oa]|deleted).{0,24}(story|hist[oó]ria))/i;
+    var STORY_FAILED_LABEL =
+      /(n[aã]o foi poss[íi]vel|erro ao|algo deu errado|could[n']t|failed to|unable to).{0,80}(story|compartilh|publicar|postar|criar)/i;
+    var lastAnnouncerText = '';
+    var lastLifecycleJumpAt = 0;
+
+    setInterval(function () {
+      try {
+        var live = document.querySelector(
+          '[role="status"],[role="alert"],[aria-live]');
+        var txt = live ? (live.textContent || '') : '';
+        if (!txt || txt === lastAnnouncerText) { return; }
+        lastAnnouncerText = txt;
+        var flat = txt.replace(/\s+/g, ' ').trim();
+
+        if (STORY_DELETED_LABEL.test(flat) || STORY_FAILED_LABEL.test(flat)) {
+          var now = Date.now();
+          if (now - lastLifecycleJumpAt < 5000) { return; }
+          var p = '';
+          try { p = window.location.pathname || ''; } catch (err) {}
+          if (!(p === '/' || p.indexOf('/stories') === 0)) { return; }
+          lastLifecycleJumpAt = now;
+          if (window.console && console.log) {
+            console.log('[SlowGram-boot] story deleted/failed -> fresh home (' +
+              flat.slice(0, 80) + ')');
+          }
+          window.location.replace(window.location.origin + '/');
+        }
+      } catch (err) { /* best-effort watcher */ }
+    }, 2000);
+  } catch (e) { /* cosmetic only */ }
+
   window.SlowGram.init();
 
   try {
