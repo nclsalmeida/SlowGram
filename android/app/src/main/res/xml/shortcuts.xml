@@ -7,7 +7,7 @@
     <shortcut
         android:shortcutId="settings"
         android:enabled="true"
-        android:icon="@drawable/ic_launcher_foreground"
+        android:icon="@mipmap/ic_launcher"
         android:shortcutShortLabel="@string/settings_title"
         android:shortcutLongLabel="@string/settings_title">
         <intent

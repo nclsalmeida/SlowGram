@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- SlowGram adaptive icon (API 26+): brand-dark background + generated
+     foreground bitmaps (tools/generate-icons.ps1 from design/logo-source.png).
+     Monochrome layer intentionally omitted: it must be an alpha-only glyph,
+     which cannot be derived from an arbitrary logo image. -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/ic_launcher_background" />
-    <foreground android:drawable="@drawable/ic_launcher_foreground" />
-    <monochrome android:drawable="@drawable/ic_launcher_foreground" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
 </adaptive-icon>

@@ -17,3 +17,10 @@ keystore.properties
 # --- OS ---
 .DS_Store
 Thumbs.db
+
+# --- Dev material (README: ".freebuff/ não é versionado") ---
+.freebuff/
+
+# Root drop of the logo: the canonical, versioned source is
+# design/logo-source.png (see tools/generate-icons.ps1)
+/logo.png
