@@ -549,8 +549,30 @@
           if (target) {
             target.style.setProperty('padding-bottom', '93px', 'important');
             sgReelPadded.push(target);
+            // ENGINE ANCHOR (v1.1.1): connectWatcher requires a [role=main]
+            // root - current instagram.com/reels markup no longer provides
+            // one, so the observer never connected and registry stayed at
+            // the connect-time scan only (probe evidence: registry=2,
+            // videos=13, 0 filtered). Plant the landmark on the ITEMS'
+            // container (one level above a full-height snap item); the
+            // engine's per-frame processBatch retry then connects, scans
+            // and registers every video, and applyToVideo lands the
+            // current-phase levers immediately. Only when no main landmark
+            // exists yet.
+            if (!document.querySelector('[role="main"]')) {
+              var anchor = target.parentElement || target;
+              if (anchor && typeof anchor.setAttribute === 'function') {
+                anchor.setAttribute('role', 'main');
+                if (window.console && console.log) {
+                  console.log('[SlowGram-boot] reels anchor role=main planted');
+                }
+              }
+            }
             if (window.console && console.log) {
-              console.log('[SlowGram-boot] reels caption lift applied (geometric)');
+              console.log('[SlowGram-boot] reels caption lift applied (geometric) on <' +
+                target.tagName + ' class=' +
+                String(target.className || '').slice(0, 70) +
+                ' h=' + target.clientHeight + '>');
             }
           }
         }
@@ -563,9 +585,31 @@
           try {
             if (window.SlowGram && typeof window.SlowGram.getState === 'function') {
               var st = window.SlowGram.getState();
+              var reg = -1;
+              try {
+                if (typeof window.SlowGram._registrySize === 'function') {
+                  reg = window.SlowGram._registrySize();
+                }
+              } catch (e4) {}
+              // How many <video> nodes carry a saturation filter right now
+              // (inline on the video OR its immediate wrapper)?
+              var vidTotal = 0;
+              var vidFiltered = 0;
+              try {
+                var vl = document.querySelectorAll('video');
+                vidTotal = vl.length;
+                for (var qi = 0; qi < vl.length; qi++) {
+                  var qn = vl[qi];
+                  if ((qn.style && qn.style.filter) ||
+                      (qn.parentElement && qn.parentElement.style &&
+                       qn.parentElement.style.filter)) { vidFiltered++; }
+                }
+              } catch (e5) {}
               console.log('[SlowGram-boot] engine: ctx=' + st.context +
                 ' run=' + st.running + ' phase=' + st.phase +
-                ' elapsed=' + Math.round(st.elapsedMs) + 'ms');
+                ' elapsed=' + Math.round(st.elapsedMs) + 'ms' +
+                ' registry=' + reg +
+                ' videos=' + vidTotal + '/' + vidFiltered + 'filtered');
             }
           } catch (e3) {}
         }
