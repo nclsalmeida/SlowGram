@@ -106,7 +106,7 @@ no Chrome mobile em instagram.com — falha idêntica fora do SlowGram:
 Corrigir esses itens exigiria remendar a página do Instagram por fora,
 o que viola os princípios do projeto. Reporte à Meta 😉
 
-**Proteções de Stories (v1.1.2)** — como o composer não dá nenhum
+**Proteções de Stories (v1.1.1)** — como o composer não dá nenhum
 feedback após postar (bug upstream acima), o wrapper adiciona duas
 salvaguardas próprias, ambas *fail-soft* e baseadas no rótulo do botão
 (PT/EN/ES — se a Meta mudar o texto, o comportamento original volta):
@@ -354,7 +354,7 @@ O wrapper diferencia explicitamente o que cada nível prova. **O APK não é
 
 1. **Testes automatizados** — 930 asserts do engine (Node; 851 no harness de
    browser) + E2E do boot do host (`test/host-inject.test.js`, Node, 18/18) +
-   testes JVM do wrapper (31, nas variantes debug e release: política de
+   testes JVM do wrapper (33, nas variantes debug e release: política de
    navegação, guard de injeção, integridade do asset, criação/estado do
    WebView via Robolectric, gate do bridge por debug, política de User-Agent,
    mapeamento de permissões WebRTC/storage e contrato de mime-types do

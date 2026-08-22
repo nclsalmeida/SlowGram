@@ -206,7 +206,7 @@
     }
   } catch (e) { /* fail-soft: manual login link remains */ }
 
-  // 5. Story-post guard (v1.1.2). Instagram's web composer gives NO
+  // 5. Story-post guard (v1.1.1). Instagram's web composer gives NO
   //    feedback after "Adicionar ao seu story" (on-device it hangs on
   //    "Carregando..." forever — upstream bug, see README "Limitações
   //    conhecidas"), so extra taps during the silent window post
@@ -323,7 +323,7 @@
     }, true);
   } catch (e) { /* cosmetic only */ }
 
-  // 6. Story-lifecycle announcer watch (v1.1.2). Instagram announces story
+  // 6. Story-lifecycle announcer watch (v1.1.1). Instagram announces story
   //    events in small aria-live/status regions. Reading THOSE nodes is
   //    cheap (textContent of a tiny subtree — unlike body.innerText, no
   //    full-page layout). A permanent 2s watcher reacts to:
@@ -346,7 +346,7 @@
 
     setInterval(function () {
       try {
-        // Upstream crash recovery (v1.1.2): when instagram.com's own JS
+        // Upstream crash recovery (v1.1.1): when instagram.com's own JS
         // dies (observed after deleting stories then posting) it renders
         // "Ocorreu um erro" + "Recarregar página". Detection walks TEXT
         // NODES ONLY (TreeWalker) - body.innerText would force a full-page
@@ -434,7 +434,7 @@
       } catch (err) { /* best-effort watcher */ }
     }, 2000);
 
-    // Explicit deletion clicks (v1.1.2): the announcement watch above
+    // Explicit deletion clicks (v1.1.1): the announcement watch above
     // depends on Instagram ANNOUNCING the deletion - it often doesn't. So
     // also arm on the ACTION itself: inside the story viewer (/stories*),
     // clicking Excluir/Discard/Delete IS the intent; give their API ~3s,
