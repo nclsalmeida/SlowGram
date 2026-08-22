@@ -198,6 +198,26 @@
       /adicionar ao seu story|add to story|agregar a tu historia/i;
     var STORY_COOLDOWN_MS = 20000;
     var lastStoryPostAt = 0;
+
+    // Navigation-confirm suppressor: while the composer is open (even
+    // stuck on "Carregando..."), instagram.com registers a beforeunload
+    // guard, so the fresh-home jump popped a "Leave site?" dialog.
+    // Registered at boot - BEFORE the composer registers its own handler -
+    // this capture listener runs FIRST and stops their handler, but ONLY
+    // when WE initiated the jump (sgAutoJumping): user-initiated navigation
+    // away from unsaved drafts keeps the protective dialog.
+    var sgAutoJumping = false;
+    window.addEventListener('beforeunload', function (e) {
+      if (sgAutoJumping && e &&
+          typeof e.stopImmediatePropagation === 'function') {
+        e.stopImmediatePropagation();
+      }
+    }, true);
+    function sgJumpHome() {
+      sgAutoJumping = true;
+      try { window.onbeforeunload = null; } catch (err) {}
+      window.location.replace(window.location.origin + '/');
+    }
     // Completion announcement (the in-page "notification below"):
     // matched in [role=status]/[role=alert]/[aria-live] regions.
     var STORY_DONE_LABEL =
@@ -285,7 +305,7 @@
                 ' (path=' + p + ')' + (mayJump ? ' -> fresh home' : ' -> staying'));
             }
             if (mayJump) {
-              window.location.replace(window.location.origin + '/');
+              sgJumpHome();
             }
           } catch (err) { /* fail-soft */ }
         }, 1500);
@@ -374,7 +394,7 @@
               (doneRecent ? 'success' : 'deleted/failed') +
               ', path=' + p + ') -> fresh home');
           }
-          window.location.replace(window.location.origin + '/');
+          sgJumpHome();
         }
       } catch (err) { /* best-effort watcher */ }
     }, 2000);
