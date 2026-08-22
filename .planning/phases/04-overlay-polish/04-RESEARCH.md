@@ -95,6 +95,6 @@ The overlay is behavioral + DOM-state. Validation strategy (nyquist):
 
 - `CONFIG.overlay.zIndex` = 2147483000 (near-max; safe because non-interactive) [ASSUMED default — value lives in CONFIG, D-11].
 - fade 400ms — CSS `transition: opacity 400ms` (D-2) [ASSUMED within 300-500ms — agent discretion].
-- Pill: `left: 16px; bottom: 16px; padding: 8px 12px; border-radius: 8px; background: rgba(12,12,14,0.42); color: #F5F5F7; font-size: 13px; font-weight: 500;` (from 04-UI-SPEC.md).
+- Pill: `left: 16px; bottom: 208px; padding: 8px 12px; border-radius: 8px; background: rgba(12,12,14,0.42); color: #F5F5F7; font-size: 13px; font-weight: 500;` (from 04-UI-SPEC.md). Reconciled 2026-08: this line previously carried the stale draft value `bottom: 16px` — a transcription slip that copied the spacing-scale `lg = 16px` (viewport SIDE distance) into the bottom slot. The approved UI-SPEC fixes `left: 16px; bottom: 208px` (xl — above the Reels profile row), and src/slowgram.js CONFIG.overlay plus test TO01h already implement/assert exactly that.
 - The engine's `overlayHost` seam exists at src/slowgram.js:98 — Phase 4 fills it [VERIFIED: src/slowgram.js:98].
 - Bus events: `elapsed` (:425), `phasechange` (:142), `reset` (:483), `contextchange` (:1673) [VERIFIED: src/slowgram.js lines cited].
