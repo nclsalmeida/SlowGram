@@ -11,6 +11,31 @@
   if (window.__slowgramInjected) { return; }
   window.__slowgramInjected = true;
 
+  // Navigation-confirm suppressor + fresh-home jump, declared at IIFE scope:
+  // in STRICT mode a function declaration inside a try block is BLOCK-SCOPED,
+  // so sections below could not see one declared in another section's try -
+  // their calls threw silent ReferenceErrors and jumps never happened.
+  // While the composer is open (even stuck on "Carregando..."), instagram.com
+  // registers a beforeunload guard that would pop a "Leave site?" dialog over
+  // our jumps. Registered at boot - BEFORE the composer's own handler - this
+  // capture listener runs FIRST and stops it ONLY when WE initiated the jump;
+  // user-initiated navigation away from unsaved drafts keeps the dialog.
+  var sgAutoJumping = false;
+  window.addEventListener('beforeunload', function (e) {
+    if (sgAutoJumping && e &&
+        typeof e.stopImmediatePropagation === 'function') {
+      e.stopImmediatePropagation();
+    }
+  }, true);
+  function sgJumpHome() {
+    sgAutoJumping = true;
+    try { window.onbeforeunload = null; } catch (err) {}
+    if (window.console && console.log) {
+      console.log('[SlowGram-boot] jumping -> fresh home');
+    }
+    window.location.replace(window.location.origin + '/');
+  }
+
   /* Host cosmetic shims (selectors verified ON-DEVICE, Pixel 7 Pro, 2026-08):
    *
    * 1. Hide Instagram's "Usar o app" / "Use the app" install banner so the
@@ -199,25 +224,6 @@
     var STORY_COOLDOWN_MS = 20000;
     var lastStoryPostAt = 0;
 
-    // Navigation-confirm suppressor: while the composer is open (even
-    // stuck on "Carregando..."), instagram.com registers a beforeunload
-    // guard, so the fresh-home jump popped a "Leave site?" dialog.
-    // Registered at boot - BEFORE the composer registers its own handler -
-    // this capture listener runs FIRST and stops their handler, but ONLY
-    // when WE initiated the jump (sgAutoJumping): user-initiated navigation
-    // away from unsaved drafts keeps the protective dialog.
-    var sgAutoJumping = false;
-    window.addEventListener('beforeunload', function (e) {
-      if (sgAutoJumping && e &&
-          typeof e.stopImmediatePropagation === 'function') {
-        e.stopImmediatePropagation();
-      }
-    }, true);
-    function sgJumpHome() {
-      sgAutoJumping = true;
-      try { window.onbeforeunload = null; } catch (err) {}
-      window.location.replace(window.location.origin + '/');
-    }
     // Completion announcement (the in-page "notification below"):
     // matched in [role=status]/[role=alert]/[aria-live] regions.
     var STORY_DONE_LABEL =
@@ -456,10 +462,19 @@
         setTimeout(function () {
           try {
             var nowD = Date.now();
-            if (nowD - lastLifecycleJumpAt < 5000) { return; }
+            if (nowD - lastLifecycleJumpAt < 5000) {
+              if (window.console && console.log) {
+                console.log('[SlowGram-boot] delete jump skipped (rate limit)');
+              }
+              return;
+            }
             lastLifecycleJumpAt = nowD;
             sgJumpHome();
-          } catch (err) { /* fail-soft */ }
+          } catch (err) {
+            if (window.console && console.log) {
+              console.log('[SlowGram-boot] delete jump failed: ' + err);
+            }
+          }
         }, 3000);
       } catch (err) { /* fail-soft */ }
     }, true);
