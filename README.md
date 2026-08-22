@@ -38,7 +38,7 @@ oculto** (background ≥ 5 min zera a sessão — o engine não te engana).
 O engine é validado por uma suíte própria de **930 assertions** no Node
 (`test/slowgram.test.js`; **851 no harness de browser** — mesma suíte, zero
 dependências), mais o E2E do boot do host (**18/18**) e os testes JVM do
-wrapper (**16**, nas variantes debug e release), incluindo verificação em
+wrapper (**31**, nas variantes debug e release), incluindo verificação em
 dispositivo real (ver "Validação em dispositivo").
 
 ## Android
@@ -55,6 +55,32 @@ Política de navegação (conservadora):
 - links externos (`http`/`https` de outros hosts) → abertos no navegador do
   sistema, nunca dentro do app;- qualquer esquema não-http (`instagram://`, `intent://`, `tel:`, …) →
    **bloqueado** — o app nunca delega para o aplicativo nativo do Instagram.
+
+**Uploads de mídia, câmera e microfone (v1.1)** — o host implementa o ciclo
+completo de mídia do Instagram Web:
+
+- `onShowFileChooser` abre o seletor do sistema (`ACTION_GET_CONTENT`)
+  aceitando `image/*` **e** `video/*` — anexos de DM, posts de feed e
+  stories; múltipla seleção suportada onde a página pede;
+- **captura nativa** de foto/vídeo aparece como fonte extra dentro do mesmo
+  seletor (linha superior do chooser), gated pela permissão `CAMERA`;
+  a foto sai via FileProvider em cache privado, apagada após o uso;
+- **WebRTC** (`getUserMedia` — câmera/mic da página, ex. Stories) passa por
+  `onPermissionRequest`, que concede SOMENTE recursos mapeados
+  (câmera/microfone) e somente com a permissão Android correspondente já
+  concedida — recurso desconhecido nunca é concedido;
+- **permissões pedidas na hora do uso, nunca antes**: `CAMERa`,
+  `READ_MEDIA_IMAGES`/`READ_MEDIA_VIDEO` (API 33+) ou
+  `READ_EXTERNAL_STORAGE` (maxSdk 32). Recusar não quebra nada: o seletor
+  SAF é permission-free — negar só esconde as fontes de captura até conceder;
+- **cancelamento seguro**: fechar o seletor sem escolher resolve o callback
+  com `null` — um callback pendente jamais trava uploads futuros.
+
+**User-Agent (v1.1)** — o wrapper deriva da UA REAL do WebView a forma exata
+Chrome-on-Android (remove os marcadores `; wv` e `Version/N.N`). Nada de
+string congelada: os números de versão acompanham o WebView instalado do
+aparelho; o fallback fixo só entra se a UA do sistema não for Chromium
+(política pura em `UserAgent.kt`, testada por JVM).
 
 **Ajustes cosméticos (host, não engine)** — regras CSS injetadas pelo
 wrapper em `android/app/src/main/assets/host-inject.js`, verificadas em
@@ -201,10 +227,35 @@ assinatura com `apksigner` antes de publicar** (falha se o APK não estiver
 assinado). Se qualquer secret estiver ausente, o passo de reconstrução
 falha com `::error::` — o release nunca publica APK sem assinatura.
 
+## Identidade visual (ícone do app)
+
+O ícone nasce de UMA imagem quadrada e vira todos os assets do launcher:
+
+1. Coloque seu logo em **`design/logo-source.png`** — PNG quadrado
+   (idealmente 1024×1024), fundo opaco: ele preenche o ícone inteiro;
+2. Rode `pwsh tools/generate-icons.ps1`;
+3. Rebuild o app (`gradlew assembleDebug` / CI).
+
+O script gera, para mdpi…xxxhdpi:
+
+- `ic_launcher.png` — ícone legado (48→192 px, cantos arredondados);
+- `ic_launcher_round.png` — variante circular;
+- `ic_launcher_foreground.png` — camada adaptativa no canvas 108dp com a
+  arte dentro da safe-zone central (66/108);
+
+mais o fundo adaptativo pela cor da marca (`values/colors.xml`). Os XMLs
+adaptativos (`mipmap-anydpi-v26/`) já apontam para esses assets — nada mais
+para editar. Sem arquivo-fonte, o script desenha automaticamente a
+identidade padrão do projeto (ampulheta sobre o fundo escuro) — é o que vem
+gerado neste repositório. A camada `monochrome` (ícones temáticos
+Android 13+) fica desligada de propósito: um glifo alfa-only não pode ser
+derivado de uma foto arbitrária.
+
 ## Privacidade
 
 - **Sem analytics, sem Firebase, sem trackers, sem SDKs de terceiros.**
-  O app não tem uma única dependência de runtime além do framework Android.
+  A única dependência de runtime além do framework Android é `androidx.activity`
+  (necessária ao seletor de uploads via ActivityResult API).
 - **Sem servidor obrigatório** — tudo roda localmente no aparelho.
 - **Sem coleta deliberada de dados pessoais.** O bridge de status do engine
   (existe **apenas em builds de debug** — release não expõe nenhuma interface
@@ -212,7 +263,12 @@ falha com `::error::` — o release nunca publica APK sem assinatura.
   deixa o aparelho.
 - A sessão do Instagram fica nos cookies locais do app (privados por app,
   `allowBackup=false`).
-- Permissão única: `android.permission.INTERNET`.
+- **Permissões mínimas, pedidas na hora do uso:** `INTERNET` sempre;
+  `CAMERA`, `RECORD_AUDIO` e `READ_MEDIA_IMAGES`/`READ_MEDIA_VIDEO`
+  (API 33+; `READ_EXTERNAL_STORAGE` até a API 32) apenas quando você anexa
+  ou captura mídia. O seletor de arquivos do sistema em si nem precisa de
+  permissão de storage. Nada de localização, contatos, notificações,
+  overlay ou acessibilidade.
 
 ## Compatibilidade
 
@@ -230,7 +286,7 @@ Níveis de validação usados neste projeto (nunca confundir um com o outro):
 
 | Nível | O que prova | Status |
 |-------|-------------|--------|
-| **Testes automatizados** | o engine roda verde sob mocks (Node 930 / browser 851) + boot do host (18) + wrapper JVM (16, debug e release) | ✅ executado nesta auditoria |
+| **Testes automatizados** | o engine roda verde sob mocks (Node 930 / browser 851) + boot do host (18) + wrapper JVM (31, debug e release) | ✅ executado nesta auditoria |
 | **Browser/harness** | `test/harness.html` em browser puro (sem servidor/npm) — Edge headless **851/851** | ✅ executado |
 | **Chrome Android** | motor REAL injetado em instagram.com no Android Chrome (UAT Fase 5): clamps exibidos, saturação em 13 wrappers, volume 0.5 em 6 vídeos (confirmação audível), reset 6 min (280s → 2s), `/direct/` 100% nativo, pill "3 min" | ✅ executado (05-UAT) |
 | **Android WebView** | wrapper completo no WebView do Pixel, **checklist formal de 6 itens executado (2026-08-16)**: login real, home renderizada, /reels/ degradando aos 3 min (pill "3 min" visível), /direct/ 100% nativo (timestamp "4 min" confirmado como nativo por posição no DOM), background 6+ min zera o relógio (sem pill ao voltar, sem crash), sessão mantida após background (perfil logado) — além dos shims e do forward de primeiro uso (D-30) | ✅ executado (checklist completo, ver abaixo) |
@@ -243,6 +299,14 @@ Níveis de validação usados neste projeto (nunca confundir um com o outro):
 - **iOS** — os clamps WebKit são spec, não validação em superfície real.
 - **CPU < 1%** do observer: estimativa estrutural (yield-at-cap 200/frame,
   síntese 5k mutações/s no harness), **não medida** em aparelho.
+- **Uploads de mídia / câmera / WebRTC em aparelho** (v1.1): cobertos por
+  testes JVM de política (chooser, permissões, mime-types); falta o checklist
+  on-device — seletor abrindo do anexo da DM, captura de câmera, grant/deny
+  das permissões, UA servindo a experiência web completa.
+- **Smoke TH4** (harness no Edge headless): env-gated — nesta sessão o
+  `msedge.exe` do host está inerte (não emite dump nem para um
+  `data:text/html`), então o item exige uma sessão com browser funcional.
+  Não é regressão do engine (927/928 asserts passam; o 1 falho é o TH4).
 
 ## Testes — níveis (importante)
 
@@ -251,9 +315,11 @@ O wrapper diferencia explicitamente o que cada nível prova. **O APK não é
 
 1. **Testes automatizados** — 930 asserts do engine (Node; 851 no harness de
    browser) + E2E do boot do host (`test/host-inject.test.js`, Node, 18/18) +
-   testes JVM do wrapper (16, nas variantes debug e release: política de
+   testes JVM do wrapper (31, nas variantes debug e release: política de
    navegação, guard de injeção, integridade do asset, criação/estado do
-   WebView via Robolectric, gate do bridge por debug).
+   WebView via Robolectric, gate do bridge por debug, política de User-Agent,
+   mapeamento de permissões WebRTC/storage e contrato de mime-types do
+   seletor de uploads).
 2. **Build** — `assembleRelease` gera o APK (CI e local).
 3. **Teste no WebView** — instalar no aparelho e confirmar que o WebView abre
    o Instagram e renderiza.
@@ -275,11 +341,14 @@ Checklist de dispositivo (status real, 2026-08):
 [ ] Kill switch em aparelho (só harness)
 [ ] Buffer lever em aparelho (off por default)
 [ ] iOS (qualquer superfície)
+[ ] Uploads de mídia em aparelho (v1.1: DM/feed/stories + câmera + WebRTC)
+[ ] UA Chrome-Mobile em aparelho (v1.1: site completo sem restrição de WebView)
 ```
 
-Se o Instagram não entregar a versão web correta com o UA padrão do WebView,
-o próximo passo documentado é um UA customizado equivalente ao Chrome Mobile
-— só com evidência real.
+O UA equivalente ao Chrome Mobile (pendência documentada da v1.0) foi
+implementado na v1.1: a UA enviada ao Instagram é derivada da UA REAL do
+WebView na forma exata Chrome-Android (sem `; wv` nem `Version/N.N`) — os
+números de versão acompanham o WebView instalado, sem string congelada.
 
 ## Aviso
 
