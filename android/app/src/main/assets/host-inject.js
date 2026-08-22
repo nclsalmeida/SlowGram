@@ -36,6 +36,18 @@
     window.location.replace(window.location.origin + '/');
   }
 
+  // TESTING LEVER (v1.1.1): accelerated reels-degradation clock. The
+  // engine's public init({clock}) seam normally ticks in real time, so the
+  // research-locked phase boundaries [3,7,12] minutes elapse here in
+  // [3,7,12] SECONDS of watch time. TESTING ONLY on the maintainer's
+  // device: flip to false, or set localStorage.sgFastReels='0', to restore
+  // the research timeline. MUST ship false in any release tag.
+  var SG_FAST_REELS = true;
+  var fastReels = SG_FAST_REELS;
+  try {
+    if (localStorage.getItem('sgFastReels') === '0') { fastReels = false; }
+  } catch (e) {}
+
   /* Host cosmetic shims (selectors verified ON-DEVICE, Pixel 7 Pro, 2026-08):
    *
    * 1. Hide Instagram's "Usar o app" / "Use the app" install banner so the
@@ -506,6 +518,8 @@
     var sgReelPadded = [];
     var sgReelProbeLogged = false;
     var sgStateProbeAt = 0;
+    var sgVolOrig = new Map();
+    var sgMirrorLogged = false;
     setInterval(function () {
       try {
         var el = document.documentElement;
@@ -540,42 +554,123 @@
             if (sgReelVideos.has(node)) { continue; }
             sgReelVideos.add(node);
           }
+          // Climb collecting EVERY full-height ancestor: the innermost fit
+          // is the video's own wrapper, the OUTERMOST fit is the true snap
+          // item the caption anchors to (organic captions live there -
+          // sponsored items carry their own layout and looked fine). Pad
+          // both; the re-assert loop keeps them in place across re-renders.
+          var fits = [];
           var cur2 = node.parentElement;
-          var target = null;
-          for (var d2 = 0; d2 < 8 && cur2 && cur2 !== document.body; d2++) {
-            if (cur2.clientHeight >= vh * 0.85) { target = cur2; break; }
+          for (var d2 = 0; d2 < 10 && cur2 && cur2 !== document.body; d2++) {
+            try {
+              if (cur2.clientHeight >= vh * 0.85) { fits.push(cur2); }
+            } catch (e6) {}
             cur2 = cur2.parentElement;
           }
-          if (target) {
-            target.style.setProperty('padding-bottom', '93px', 'important');
-            sgReelPadded.push(target);
-            // ENGINE ANCHOR (v1.1.1): connectWatcher requires a [role=main]
-            // root - current instagram.com/reels markup no longer provides
-            // one, so the observer never connected and registry stayed at
-            // the connect-time scan only (probe evidence: registry=2,
-            // videos=13, 0 filtered). Plant the landmark on the ITEMS'
-            // container (one level above a full-height snap item); the
-            // engine's per-frame processBatch retry then connects, scans
-            // and registers every video, and applyToVideo lands the
-            // current-phase levers immediately. Only when no main landmark
-            // exists yet.
-            if (!document.querySelector('[role="main"]')) {
-              var anchor = target.parentElement || target;
-              if (anchor && typeof anchor.setAttribute === 'function') {
-                anchor.setAttribute('role', 'main');
+          if (fits.length) {
+            var padTargets = [fits[0]];
+            if (fits[fits.length - 1] !== fits[0]) {
+              padTargets.push(fits[fits.length - 1]);
+            }
+            for (var t2 = 0; t2 < padTargets.length; t2++) {
+              var tgt = padTargets[t2];
+              try {
+                tgt.style.setProperty('padding-bottom', '93px', 'important');
+                if (sgReelPadded.indexOf(tgt) === -1) { sgReelPadded.push(tgt); }
                 if (window.console && console.log) {
-                  console.log('[SlowGram-boot] reels anchor role=main planted');
+                  console.log('[SlowGram-boot] reels lift on <' + tgt.tagName +
+                    ' class=' + String(tgt.className || '').slice(0, 70) +
+                    ' h=' + tgt.clientHeight + '> fit#' + t2);
+                }
+              } catch (e7) {}
+            }
+            // ENGINE ANCHOR v2 (v1.1.1): the page DOES have a [role=main],
+            // but the reels viewer is an overlay OUTSIDE it - the observer
+            // connected to the wrong subtree, so registrations starved
+            // (probe: registry=1 while videos=9). connectWatcher's SECOND
+            // root is any [role=dialog] CONTAINING a video: plant that role
+            // on the items' container (unless a real dialog already wraps
+            // this video). The engine's per-frame processBatch retry then
+            // picks the new root up, registers everything and lands the
+            // current-phase levers.
+            var hasDlg = false;
+            try {
+              var dlgs = document.querySelectorAll('[role="dialog"]');
+              for (var di = 0; di < dlgs.length; di++) {
+                if (dlgs[di].contains(node)) { hasDlg = true; break; }
+              }
+            } catch (e8) {}
+            if (!hasDlg) {
+              var cont = fits[fits.length - 1].parentElement ||
+                fits[fits.length - 1];
+              if (cont && cont !== document.body &&
+                  typeof cont.setAttribute === 'function' &&
+                  cont.getAttribute('role') !== 'dialog') {
+                cont.setAttribute('role', 'dialog');
+                if (window.console && console.log) {
+                  console.log('[SlowGram-boot] reels overlay role=dialog planted');
                 }
               }
             }
-            if (window.console && console.log) {
-              console.log('[SlowGram-boot] reels caption lift applied (geometric) on <' +
-                target.tagName + ' class=' +
-                String(target.className || '').slice(0, 70) +
-                ' h=' + target.clientHeight + '>');
-            }
           }
         }
+        // DEGRADATION MIRROR (v1.1.1, testing lever). The engine computes
+        // phase from watch time correctly (probe-proven), but lever DELIVERY
+        // needs video registration, which the current reels markup starves.
+        // This mirror applies the SAME values the engine would - read live
+        // from SlowGram.getConfig() so numbers never drift - to every
+        // mounted video, driven by getState().phase. Engine stays
+        // authoritative: values are identical, writes idempotent, and when
+        // registration heals the engine writes the same thing anyway.
+        // Gated by the testing lever; phase 0 clears everything.
+        if (fastReels) {
+          try {
+            var cfgM = (window.SlowGram && window.SlowGram.getConfig)
+              ? window.SlowGram.getConfig() : null;
+            var stM = (window.SlowGram && window.SlowGram.getState)
+              ? window.SlowGram.getState() : null;
+            if (cfgM && stM && stM.context === 'REELS') {
+              var phS = String(Math.min(stM.phase, 3));
+              var satV = cfgM.leverParams.saturation[phS];
+              var rateV = cfgM.leverParams.playbackRate[phS];
+              var volV = cfgM.leverParams.volume[phS];
+              var mv = document.querySelectorAll('video');
+              for (var mi = 0; mi < mv.length; mi++) {
+                var mnode = mv[mi];
+                try {
+                  if (satV !== undefined) {
+                    mnode.style.setProperty('filter',
+                      'saturate(' + satV + ')', 'important');
+                  } else if (mnode.style.filter) {
+                    mnode.style.removeProperty('filter');
+                  }
+                  if (rateV !== undefined &&
+                      Math.abs(mnode.playbackRate - rateV) > 0.01) {
+                    mnode.playbackRate = rateV;
+                  } else if (rateV === undefined && mnode.playbackRate !== 1) {
+                    mnode.playbackRate = 1;
+                  }
+                  if (volV !== undefined) {
+                    if (!sgVolOrig.has(mnode)) { sgVolOrig.set(mnode, mnode.volume); }
+                    var want = (sgVolOrig.get(mnode) || 1) * volV;
+                    if (Math.abs(mnode.volume - want) > 0.01) { mnode.volume = want; }
+                  } else if (sgVolOrig.has(mnode)) {
+                    mnode.volume = sgVolOrig.get(mnode);
+                    sgVolOrig.delete(mnode);
+                  }
+                } catch (e9) {}
+              }
+              if (!sgMirrorLogged && phS !== '0') {
+                sgMirrorLogged = true;
+                if (window.console && console.log) {
+                  console.log('[SlowGram-boot] mirror: phase ' + phS +
+                    ' -> sat=' + satV + ' rate=' + rateV + ' vol=' + volV);
+                }
+              }
+            }
+          } catch (errM) { /* fail-soft */ }
+        }
+
         // Engine state probe: every ~10s on the reels surface, expose
         // exactly where the degradation pipeline stands (context, running,
         // phase, elapsed) - turns "not degrading" into a pinpointed stage.
@@ -617,20 +712,7 @@
     }, 2000);
   } catch (e) { /* cosmetic only */ }
 
-  // TESTING LEVER (v1.1.1): accelerated reels-degradation clock. The
-  // engine's public init({clock}) seam normally ticks in real time, so the
-  // research-locked phase boundaries [3,7,12] minutes gate each lever tier.
-  // With this 60x clock the SAME boundaries elapse in [3,7,12] SECONDS of
-  // real watch time - maximum degradation (saturation .4, playbackRate .8,
-  // volume .5, autoplay off) inside a minute. TESTING ONLY on the
-  // maintainer's device: flip SG_FAST_REELS to false, or set
-  // localStorage.sgFastReels='0', to restore the research timeline.
-  // MUST ship false in any release tag.
-  var SG_FAST_REELS = true;
-  var fastReels = SG_FAST_REELS;
-  try {
-    if (localStorage.getItem('sgFastReels') === '0') { fastReels = false; }
-  } catch (e) {}
+  // Init with the testing clock seam when the lever is armed (see top).
   window.SlowGram.init(fastReels
     ? { clock: { now: function () { return Date.now() * 60; } } }
     : undefined);
