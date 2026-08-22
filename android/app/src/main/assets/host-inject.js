@@ -480,7 +480,89 @@
     }, true);
   } catch (e) { /* cosmetic only */ }
 
-  window.SlowGram.init();
+  // 7. Reels caption-lift, geometric fallback (v1.1.1). Meta ROTATES the
+  //    obfuscated class names the CSS shim matches - xpqajaz/xtijo5x died
+  //    on-device again and captions slid back under the bottom nav. This
+  //    applier is class-INDEPENDENT: from each <video>, climb ancestors to
+  //    the full-viewport snap item and pin padding-bottom inline. Layout
+  //    reads (clientHeight) happen ONLY on first-seen videos; known ones
+  //    get a cheap inline-style re-assert per tick because React re-renders
+  //    wipe styles. Route-gated by data-sg-reels like the CSS rule. Also
+  //    logs the video's ancestor className chain once per page so rotated
+  //    names can be re-pinned into the CSS shim straight from Logcat.
+  try {
+    var sgReelVideos = (typeof WeakSet === 'function') ? new WeakSet() : null;
+    var sgReelPadded = [];
+    var sgReelProbeLogged = false;
+    setInterval(function () {
+      try {
+        var el = document.documentElement;
+        if (!el || el.getAttribute('data-sg-reels') !== '1') { return; }
+        var vids = document.querySelectorAll('video');
+        if (!vids.length) { return; }
+        if (!sgReelPadded.length && vids.length &&
+            sgReelVideos && sgReelVideos.has(vids[0])) { return; }
+        if (!sgReelProbeLogged && window.console && console.log) {
+          sgReelProbeLogged = true;
+          var chain = [];
+          var cur = vids[0];
+          for (var d = 0; d < 5 && cur; d++) {
+            chain.push(String(cur.className || '')
+              .replace(/\s+/g, '.').slice(0, 50));
+            cur = cur.parentElement;
+          }
+          console.log('[SlowGram-boot] reels probe: ' + chain.join(' < '));
+        }
+        // cheap re-assert of already-padded items (no layout reads)
+        for (var j = 0; j < sgReelPadded.length; j++) {
+          try {
+            if (sgReelPadded[j].style.paddingBottom !== '93px') {
+              sgReelPadded[j].style.paddingBottom = '93px';
+            }
+          } catch (e2) {}
+        }
+        var vh = window.innerHeight || 0;
+        for (var i = 0; i < vids.length; i++) {
+          var node = vids[i];
+          if (sgReelVideos) {
+            if (sgReelVideos.has(node)) { continue; }
+            sgReelVideos.add(node);
+          }
+          var cur2 = node.parentElement;
+          var target = null;
+          for (var d2 = 0; d2 < 8 && cur2 && cur2 !== document.body; d2++) {
+            if (cur2.clientHeight >= vh * 0.85) { target = cur2; break; }
+            cur2 = cur2.parentElement;
+          }
+          if (target) {
+            target.style.paddingBottom = '93px';
+            sgReelPadded.push(target);
+            if (window.console && console.log) {
+              console.log('[SlowGram-boot] reels caption lift applied (geometric)');
+            }
+          }
+        }
+      } catch (err) { /* fail-soft */ }
+    }, 2000);
+  } catch (e) { /* cosmetic only */ }
+
+  // TESTING LEVER (v1.1.1): accelerated reels-degradation clock. The
+  // engine's public init({clock}) seam normally ticks in real time, so the
+  // research-locked phase boundaries [3,7,12] minutes gate each lever tier.
+  // With this 60x clock the SAME boundaries elapse in [3,7,12] SECONDS of
+  // real watch time - maximum degradation (saturation .4, playbackRate .8,
+  // volume .5, autoplay off) inside a minute. TESTING ONLY on the
+  // maintainer's device: flip SG_FAST_REELS to false, or set
+  // localStorage.sgFastReels='0', to restore the research timeline.
+  // MUST ship false in any release tag.
+  var SG_FAST_REELS = true;
+  var fastReels = SG_FAST_REELS;
+  try {
+    if (localStorage.getItem('sgFastReels') === '0') { fastReels = false; }
+  } catch (e) {}
+  window.SlowGram.init(fastReels
+    ? { clock: { now: function () { return Date.now() * 60; } } }
+    : undefined);
 
   try {
     var st = window.SlowGram.getState();

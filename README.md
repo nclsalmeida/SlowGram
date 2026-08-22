@@ -106,6 +106,14 @@ no Chrome mobile em instagram.com — falha idêntica fora do SlowGram:
 Corrigir esses itens exigiria remendar a página do Instagram por fora,
 o que viola os princípios do projeto. Reporte à Meta 😉
 
+**Alavanca de teste — relógio de degradação acelerado (ATIVA no
+dispositivo do mantenedor)** — `SG_FAST_REELS` no boot usa o seam público
+`init({clock})` com relógio 60×: os limites de fase `[3,7,12] min`
+elapsam em `[3,7,12] s` de reels assistido — degradação máxima em menos
+de um minuto. Desligar com `localStorage.sgFastReels='0'` ou trocando a
+constante. **OBRIGATÓRIO voltar para `false` antes de qualquer tag de
+release.**
+
 **Proteções de Stories (v1.1.1)** — como o composer não dá nenhum
 feedback após postar (bug upstream acima), o wrapper adiciona duas
 salvaguardas próprias, ambas *fail-soft* e baseadas no rótulo do botão
@@ -135,7 +143,12 @@ seletores, o comportamento original volta sem quebrar nada):
   cobria as últimas linhas da legenda ("… mais", "Áudio original") e
   roubava o toque do "mais" (a aba Reels da nav ficava por cima). Com o
   padding, o bloco da legenda sobe e o toque em qualquer parte dela
-  expande o texto normalmente.
+  expande o texto normalmente. Como a Meta ROTACIONA esses nomes ofuscados,
+  existe um fallback geométrico classe-independente: a cada novo `<video>`
+  no surface de reels, sobe pelos ancestrais até o item snap de altura
+  cheia e aplica o padding inline (reafirmado a cada tique, pois o React
+  limpa estilos). Um probe loga a cadeia de classes do vídeo uma vez por
+  página para re-pinçar o seletor CSS direto do Logcat.
 
 **Configurações e privacidade:** a tela (privacidade + sobre + GitHub +
 aviso não-afiliado) é acessada por **atalho do launcher** — pressione e
