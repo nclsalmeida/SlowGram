@@ -673,29 +673,45 @@
               NodeFilter.SHOW_TEXT, null);
             var tn2;
             var budget2 = 6000;
+            var markers = [];
             while ((tn2 = walker2.nextNode()) && budget2-- > 0) {
               var vv2 = tn2.nodeValue || '';
-              if (/Áudio original|Vídeos do Reels de/.test(vv2)) {
-                var base = tn2.parentElement;
-                var cand = base;
-                var big = base;
-                for (var ci = 0; ci < 8 && big && big !== document.body; ci++) {
-                  try {
-                    if (big.getBoundingClientRect().height > window.innerHeight * 0.55) {
-                      break;
-                    }
-                    cand = big;
-                  } catch (eC) {}
-                  big = big.parentElement;
+              if (/Áudio original|Vídeos do Reels de/.test(vv2) &&
+                  tn2.parentElement) {
+                var pE = tn2.parentElement;
+                var dup = false;
+                for (var dx = 0; dx < markers.length; dx++) {
+                  if (markers[dx] === pE || markers[dx].contains(pE) ||
+                      pE.contains(markers[dx])) { dup = true; break; }
                 }
-                capEl = cand || base;
+                if (!dup) { markers.push(pE); }
+                if (markers.length >= 3) { break; }
+              }
+            }
+            if (markers.length) {
+              // Lowest common ancestor of every caption-cluster marker =
+              // the smallest single node containing username + text + audio.
+              var lca = markers[0];
+              for (var mi = 1; mi < markers.length && lca; mi++) {
+                var other = markers[mi];
+                while (lca && !lca.contains(other)) {
+                  lca = lca.parentElement;
+                }
+              }
+              if (lca && lca !== document.body) {
+                capEl = lca;
                 sgCapLayer = capEl;
-                if (window.console && console.log) {
-                  console.log('[SlowGram-boot] caption layer found <' +
-                    capEl.tagName + ' class=' +
-                    String(capEl.className || '').slice(0, 60) + '>');
-                }
-                break;
+                try {
+                  var rC = capEl.getBoundingClientRect();
+                  if (window.console && console.log) {
+                    console.log('[SlowGram-boot] caption block <' +
+                      capEl.tagName + ' class=' +
+                      String(capEl.className || '').slice(0, 50) +
+                      '> h=' + Math.round(rC.height) +
+                      ' bottom=' + Math.round(rC.bottom) +
+                      ' pos=' + getComputedStyle(capEl).position);
+                  }
+                } catch (eC2) {}
               }
             }
           }
