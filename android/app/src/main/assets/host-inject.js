@@ -201,7 +201,7 @@
     // Completion announcement (the in-page "notification below"):
     // matched in [role=status]/[role=alert]/[aria-live] regions.
     var STORY_DONE_LABEL =
-      /((story|hist[oó]ria).{0,40}(postado|publicado|compartilhado|posted|shared|criad[oa])|(postado|publicado|compartilhado).{0,24}(story|hist[oó]ria))/i;
+      /((story|hist[oó]ria).{0,40}(postado|publicado|compartilhado|adicionad[oa]|posted|shared|criad[oa])|(postado|publicado|compartilhado|adicionad[oa]).{0,24}(story|hist[oó]ria))/i;
     var lastLiveRegionText = '';
     var lastLiveRegionLogAt = 0;
 
