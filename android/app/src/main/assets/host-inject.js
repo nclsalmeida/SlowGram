@@ -198,6 +198,12 @@
       /adicionar ao seu story|add to story|agregar a tu historia/i;
     var STORY_COOLDOWN_MS = 20000;
     var lastStoryPostAt = 0;
+    // Completion announcement (the in-page "notification below"):
+    // matched in [role=status]/[role=alert]/[aria-live] regions.
+    var STORY_DONE_LABEL =
+      /((story|hist[oó]ria).{0,40}(postado|publicado|compartilhado|posted|shared|criad[oa])|(postado|publicado|compartilhado).{0,24}(story|hist[oó]ria))/i;
+    var lastLiveRegionText = '';
+    var lastLiveRegionLogAt = 0;
 
     document.addEventListener('click', function (e) {
       try {
@@ -226,13 +232,35 @@
           console.log('[SlowGram-boot] story post detected');
         }
 
-        // b) auto-return to a fresh home once the composer closes.
+        // b) auto-return to a fresh home as soon as the post is CONFIRMED
+        //    (the page announces it in an aria-live/status region — the
+        //    "notification below") or the composer closes, whichever first.
         var polls = 0;
         var timer = setInterval(function () {
           polls += 1;
+
+          var confirmed = false;
+          try {
+            var live = document.querySelector(
+              '[role="status"],[role="alert"],[aria-live]');
+            var txt = live ? (live.textContent || '') : '';
+            if (txt && txt !== lastLiveRegionText) {
+              lastLiveRegionText = txt;
+              // Diagnostic breadcrumb: the exact wording lands in Logcat so
+              // the matcher can be tuned if a locale ever stops matching.
+              if (window.console && console.log &&
+                  Date.now() - lastLiveRegionLogAt > 3000) {
+                lastLiveRegionLogAt = Date.now();
+                console.log('[SlowGram-boot] live region: ' +
+                  txt.replace(/\s+/g, ' ').trim().slice(0, 140));
+              }
+            }
+            if (txt && STORY_DONE_LABEL.test(txt)) { confirmed = true; }
+          } catch (err) { /* probe is best-effort */ }
+
           var closed = true;
           try { closed = !document.contains(btn); } catch (err) { closed = true; }
-          if (!closed) {
+          if (!confirmed && !closed) {
             if (polls >= 40) { clearInterval(timer); }   // hung composer: give up
             return;
           }
@@ -244,7 +272,7 @@
           if (p === '/' || p.indexOf('/stories') === 0) {
             try {
               if (window.console && console.log) {
-                console.log('[SlowGram-boot] composer closed -> fresh home');
+                console.log('[SlowGram-boot] story confirmed/closed -> fresh home');
               }
               window.location.replace(window.location.origin + '/');
             } catch (err) { /* fail-soft */ }

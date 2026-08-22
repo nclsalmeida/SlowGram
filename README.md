@@ -114,10 +114,12 @@ salvaguardas próprias, ambas *fail-soft* e baseadas no rótulo do botão
 - **Anti-duplicado**: toque em "Adicionar ao seu story" é capturado; os
   seguintes, por 20s, são ignorados (mata o duplo-toque e o spam de
   impaciência durante a janela morta de upload);
-- **Auto-retorno à home**: detectada a postagem, o wrapper aguarda o
-  composer fechar e recarrega uma home fresca — seus stories já aparecem.
-  Nunca interrompe um upload em andamento (só age com o botão fora do
-  DOM) e desiste em silêncio após ~60s se o composer travar (upstream).
+- **Auto-retorno à home**: na confirmação da postagem (o aviso que
+  desliza na parte de baixo — região `aria-live` da página) ou no
+  fechamento do composer, o que vier primeiro, o wrapper recarrega uma
+  home fresca — seus stories já aparecem. Nunca interrompe um upload em
+  andamento e desiste em silêncio após ~60s se o composer travar
+  (upstream).
 
 **Ajustes cosméticos (host, não engine)** — regras CSS injetadas pelo
 wrapper em `android/app/src/main/assets/host-inject.js`, verificadas em
