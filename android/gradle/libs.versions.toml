@@ -6,10 +6,13 @@ agp = "8.13.2"
 kotlin = "2.2.20"
 junit = "4.13.2"
 robolectric = "4.14.1"
+# Only androidx runtime dependency: the ActivityResult API (media uploads).
+activity = "1.10.1"
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+androidx-activity = { group = "androidx.activity", name = "activity-ktx", version.ref = "activity" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -4,7 +4,10 @@
 
     <string name="settings_title">Configurações e privacidade</string>
     <string name="settings_privacy_title">Privacidade</string>
-    <string name="settings_privacy_body">O SlowGram não coleta dados pessoais: sem analytics, sem Firebase, sem trackers e sem servidor obrigatório — tudo roda localmente no aparelho. A única permissão é INTERNET, e a sessão do Instagram fica nos cookies locais do app (nunca enviados ao SlowGram). Backup em nuvem desativado.</string>
+    <string name="settings_privacy_body">O SlowGram não coleta dados pessoais: sem analytics, sem Firebase, sem trackers e sem servidor obrigatório — tudo roda localmente no aparelho. As permissões são pedidas só na hora do uso: INTERNET sempre; câmera/microfone e fotos/vídeos apenas quando você anexa ou captura mídia — e nada sai do aparelho além do seu próprio envio ao Instagram. A sessão do Instagram fica nos cookies locais do app (nunca enviados ao SlowGram). Backup em nuvem desativado.</string>
+
+    <!-- Seletor de upload de mídia (anexos de DM, posts de feed/stories) -->
+    <string name="upload_chooser_title">Selecionar foto ou vídeo</string>
 
     <string name="about_title">Sobre o SlowGram</string>
     <string name="about_intro">O SlowGram é um experimento gratuito e open-source que reduz de forma suave o consumo compulsivo de Reels. Ele roda o Instagram Web dentro de um WebView e aplica uma degradação gradual e reversível ao feed depois de alguns minutos de uso contínuo.</string>

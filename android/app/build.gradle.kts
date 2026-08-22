@@ -114,8 +114,11 @@ android {
 }
 
 dependencies {
-    // Runtime: zero third-party dependencies — the app is a thin framework
-    // (Activity + WebView) host. Local-first, auditable.
+    // Runtime: the ONLY androidx dependency — androidx.activity, required by
+    // the ActivityResultLauncher that powers media uploads (DM/feed/stories
+    // file inputs). No analytics, no trackers, local-first, auditable.
+    implementation(libs.androidx.activity)
+
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
 }

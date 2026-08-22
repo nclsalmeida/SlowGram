@@ -5,7 +5,10 @@
     <!-- Settings & privacy screen -->
     <string name="settings_title">Settings &amp; privacy</string>
     <string name="settings_privacy_title">Privacy</string>
-    <string name="settings_privacy_body">SlowGram collects no personal data: no analytics, no Firebase, no trackers, no mandatory server — everything runs locally on your device. The only permission is INTERNET, and your Instagram session stays in the app\'s local cookies (never sent to SlowGram). Cloud backup is disabled.</string>
+    <string name="settings_privacy_body">SlowGram collects no personal data: no analytics, no Firebase, no trackers, no mandatory server — everything runs locally on your device. Permissions are asked only at the moment of use: INTERNET always; camera/mic and photos/videos only when you attach or capture media, and nothing leaves the device except your own upload to Instagram. Your Instagram session stays in the app\'s local cookies (never sent to SlowGram). Cloud backup is disabled.</string>
+
+    <!-- Media upload chooser (DM attachments, feed/stories posts) -->
+    <string name="upload_chooser_title">Select photo or video</string>
 
     <!-- About screen -->
     <string name="about_title">About SlowGram</string>

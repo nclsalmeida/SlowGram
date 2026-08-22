@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider paths: only the camera-capture scratch dir is shared,
+     and only with the app the user picked (grantUriPermissions). -->
+<paths>
+    <cache-path
+        name="slowgram_capture"
+        path="capture/" />
+</paths>

@@ -5,6 +5,7 @@ import android.view.View
 import android.webkit.WebSettings
 import android.webkit.WebView
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -37,6 +38,38 @@ class MainActivityTest {
             WebSettings.MIXED_CONTENT_NEVER_ALLOW,
             webView.settings.mixedContentMode
         )
+    }
+
+    @Test
+    fun `webview is configured for the full media experience`() {
+        // v1.1: uploads (DM/feed/stories), autoplay and storage surfaces.
+        val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
+        val webView = activity.findViewById<WebView>(R.id.webview)
+        val s = webView.settings
+
+        assertTrue("databaseEnabled must be on (compat surface)", s.databaseEnabled)
+        assertTrue("allowFileAccess must be on (nav policy still blocks file://)", s.allowFileAccess)
+        assertTrue("allowContentAccess must be on (picker thumbnails)", s.allowContentAccess)
+        assertFalse(
+            "Reels autoplay must not require a user gesture",
+            s.mediaPlaybackRequiresUserGesture
+        )
+    }
+
+    @Test
+    fun `user agent is presented as chrome mobile`() {
+        // v1.1 decision: instagram.com must not see the restricted WebView UA.
+        val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
+        val webView = activity.findViewById<WebView>(R.id.webview)
+        val ua = webView.settings.userAgentString
+
+        assertTrue("UA must identify as Chromium", ua.contains("Chrome/"))
+        assertFalse("the '; wv' marker must be stripped", ua.contains("; wv"))
+        assertFalse(
+            "the Version/N.N pseudo-token must be stripped",
+            Regex("Version/[\\d.]").containsMatchIn(ua)
+        )
+        assertTrue("must remain an Android UA", ua.contains("Android"))
     }
 
     @Test
