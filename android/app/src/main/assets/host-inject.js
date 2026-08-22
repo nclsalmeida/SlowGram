@@ -523,7 +523,8 @@
     var sgReinitDone = false;
     var sgCapLayer = null;
     var sgCapFindAt = 0;
-    var sgCapLiftLogged = false;
+    var sgCapMode = 'none';
+    var sgCapSponsored = false;
     setInterval(function () {
       try {
         var el = document.documentElement;
@@ -656,17 +657,20 @@
             }
           }
         }
-        // CAPTION-LAYER LIFT (v1.1.1, surgical): today's organic reels keep
-        // the caption in a floating layer anchored to the viewport bottom -
-        // NOT a child of the snap item - so item padding cannot reach it
-        // (sponsored items use a different template and looked fine). Find
-        // the caption by its own TEXT, climb to its positioning layer and
-        // raise THAT: bottom=93px when bottom-anchored, translateY otherwise.
-        // Found once per page, re-found on detach, re-asserted every tick.
+        // CAPTION-LAYER LIFT (v1.1.2-dev, ad-aware): organic reels keep the
+        // caption in a floating layer anchored to the viewport bottom, hidden
+        // behind the nav - THOSE need our +93px lift. Sponsored reels embed a
+        // "Saiba mais" CTA card and Instagram's own template ALREADY raises
+        // their caption above it; lifting again shoves the text into the
+        // subject's face (screenshot-verified). So: find the caption by its
+        // own TEXT, detect an ad marker (Patrocinado/Sponsored) sharing its
+        // subtree, and lift ONLY organic captions - actively REMOVING our
+        // styles from sponsored ones. Re-evaluated every 3s because React
+        // recycles nodes across swipes.
         try {
           var capEl = sgCapLayer;
           if (capEl && !document.contains(capEl)) { capEl = null; sgCapLayer = null; }
-          if (!capEl && Date.now() - sgCapFindAt > 3000) {
+          if (Date.now() - sgCapFindAt > 3000) {
             sgCapFindAt = Date.now();
             var walker2 = document.createTreeWalker(
               document.body || document.documentElement,
@@ -674,8 +678,13 @@
             var tn2;
             var budget2 = 6000;
             var markers = [];
+            var adEl = null;
             while ((tn2 = walker2.nextNode()) && budget2-- > 0) {
               var vv2 = tn2.nodeValue || '';
+              if (!adEl && /patrocinad[oa]|sponsored/i.test(vv2) &&
+                  tn2.parentElement) {
+                adEl = tn2.parentElement;
+              }
               if (/Áudio original|Vídeos do Reels de/.test(vv2) &&
                   tn2.parentElement) {
                 var pE = tn2.parentElement;
@@ -685,8 +694,8 @@
                       pE.contains(markers[dx])) { dup = true; break; }
                 }
                 if (!dup) { markers.push(pE); }
-                if (markers.length >= 3) { break; }
               }
+              if (markers.length >= 3 && adEl) { break; }
             }
             if (markers.length) {
               // Lowest common ancestor of every caption-cluster marker =
@@ -701,31 +710,45 @@
               if (lca && lca !== document.body) {
                 capEl = lca;
                 sgCapLayer = capEl;
-                try {
-                  var rC = capEl.getBoundingClientRect();
-                  if (window.console && console.log) {
-                    console.log('[SlowGram-boot] caption block <' +
-                      capEl.tagName + ' class=' +
-                      String(capEl.className || '').slice(0, 50) +
-                      '> h=' + Math.round(rC.height) +
-                      ' bottom=' + Math.round(rC.bottom) +
-                      ' pos=' + getComputedStyle(capEl).position);
-                  }
-                } catch (eC2) {}
               }
             }
+            // Sponsored iff an ad marker sits in the same reel subtree as
+            // the caption block (an ancestor of the marker contains it).
+            sgCapSponsored = false;
+            if (adEl && capEl) {
+              var anc = adEl;
+              for (var ai = 0; ai < 16 && anc && anc !== document.body; ai++) {
+                if (anc.contains(capEl)) { sgCapSponsored = true; break; }
+                anc = anc.parentElement;
+              }
+            }
+            if (capEl) {
+              try {
+                var rC = capEl.getBoundingClientRect();
+                if (window.console && console.log) {
+                  console.log('[SlowGram-boot] caption block <' +
+                    capEl.tagName + ' class=' +
+                    String(capEl.className || '').slice(0, 50) +
+                    '> h=' + Math.round(rC.height) +
+                    ' bottom=' + Math.round(rC.bottom) +
+                    ' pos=' + getComputedStyle(capEl).position +
+                    ' ad=' + sgCapSponsored);
+                }
+              } catch (eC2) {}
+            }
           }
-          if (capEl) {
+          if (capEl && !sgCapSponsored) {
             var csB = null;
             try { csB = getComputedStyle(capEl).position; } catch (eD) {}
             if (csB === 'fixed' || csB === 'absolute') {
               try {
                 if (capEl.style.bottom !== '93px') {
                   capEl.style.setProperty('bottom', '93px', 'important');
-                  if (window.console && console.log &&
-                      !sgCapLiftLogged) {
-                    sgCapLiftLogged = true;
-                    console.log('[SlowGram-boot] caption lifted via bottom');
+                  if (sgCapMode !== 'lifted-bottom') {
+                    sgCapMode = 'lifted-bottom';
+                    if (window.console && console.log) {
+                      console.log('[SlowGram-boot] caption ORGANIC lifted via bottom');
+                    }
                   }
                 }
               } catch (eE) {}
@@ -734,14 +757,26 @@
                 if (capEl.style.transform !== 'translateY(-93px)') {
                   capEl.style.setProperty('transform',
                     'translateY(-93px)', 'important');
-                  if (window.console && console.log &&
-                      !sgCapLiftLogged) {
-                    sgCapLiftLogged = true;
-                    console.log('[SlowGram-boot] caption lifted via translate');
+                  if (sgCapMode !== 'lifted-translate') {
+                    sgCapMode = 'lifted-translate';
+                    if (window.console && console.log) {
+                      console.log('[SlowGram-boot] caption ORGANIC lifted via translate');
+                    }
                   }
                 }
               } catch (eF) {}
             }
+          } else if (capEl && sgCapSponsored && sgCapMode !== 'native-ad') {
+            // Instagram already raises sponsored captions (CTA card layout) -
+            // strip OUR lift so the text stays where the template put it.
+            try {
+              capEl.style.removeProperty('bottom');
+              capEl.style.removeProperty('transform');
+              sgCapMode = 'native-ad';
+              if (window.console && console.log) {
+                console.log('[SlowGram-boot] caption SPONSORED left native (CTA layout)');
+              }
+            } catch (eG) {}
           }
         } catch (errC) { /* fail-soft */ }
 
