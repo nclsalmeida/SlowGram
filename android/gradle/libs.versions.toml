@@ -6,13 +6,16 @@ agp = "8.13.2"
 kotlin = "2.2.20"
 junit = "4.13.2"
 robolectric = "4.14.1"
-# Only androidx runtime dependency: the ActivityResult API (media uploads).
+# Only androidx runtime dependencies: the ActivityResult API (media uploads)
+# and SwipeRefreshLayout (pull-to-refresh, matching mobile-browser behavior).
 activity = "1.10.1"
+swiperefreshlayout = "1.1.0"
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 androidx-activity = { group = "androidx.activity", name = "activity-ktx", version.ref = "activity" }
+androidx-swiperefreshlayout = { group = "androidx.swiperefreshlayout", name = "swiperefreshlayout", version.ref = "swiperefreshlayout" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -4,6 +4,7 @@ import android.content.res.Configuration
 import android.view.View
 import android.webkit.WebSettings
 import android.webkit.WebView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -70,6 +71,27 @@ class MainActivityTest {
             Regex("Version/[\\d.]").containsMatchIn(ua)
         )
         assertTrue("must remain an Android UA", ua.contains("Android"))
+    }
+
+    @Test
+    fun `webview sits inside a pull-to-refresh layout`() {
+        val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
+        val webView = activity.findViewById<WebView>(R.id.webview)
+        assertTrue(
+            "the WebView must be wrapped by SwipeRefreshLayout (browser-style refresh)",
+            webView.parent is SwipeRefreshLayout
+        )
+    }
+
+    @Test
+    fun `pull-to-refresh is disabled on reels routes only`() {
+        // A downward swipe on the first reel must never reload mid-session.
+        assertTrue(MainActivity.pathIsReels("/reels/"))
+        assertTrue(MainActivity.pathIsReels("/reels"))
+        assertFalse(MainActivity.pathIsReels("/"))
+        assertFalse(MainActivity.pathIsReels("/direct/inbox/"))
+        assertFalse(MainActivity.pathIsReels("/p/C0DE123/"))
+        assertFalse(MainActivity.pathIsReels(null))
     }
 
     @Test

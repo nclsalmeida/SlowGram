@@ -40,7 +40,10 @@
    *    other surfaces — on-device, the story composer matched and the ghost
    *    93px padding desynced touch targets from visuals (story text could
    *    be typed but never dragged). The rule therefore only applies while
-   *    html[data-sg-reels="1"], flipped by the SPA route watch below.
+   *    html[data-sg-reels="1"], flipped by the SPA route watch below, AND
+   *    only for elements wrapping a real reel <video> (:has(video)) — the
+   *    composer previews photos as <img>, so it stays immune even when it
+   *    overlays the /reels route.
    *
    * 4. First-use experience: Instagram's logged-out landing page (the
    *    "Compartilhe momentos…" interstitial with an "Abrir Instagram"
@@ -57,7 +60,7 @@
     style.textContent =
       'div._acc8._abpk { display: none !important; }\n' +
       'i[aria-label="Instagram"] { filter: brightness(0) invert(1); }\n' +
-      'html[data-sg-reels="1"] div[class*="xpqajaz"][class*="xtijo5x"] ' +
+      'html[data-sg-reels="1"] div[class*="xpqajaz"][class*="xtijo5x"]:has(video) ' +
         '{ padding-bottom: 93px !important; }';
     (document.head || document.documentElement).appendChild(style);
   } catch (e) { /* cosmetic only */ }
@@ -117,9 +120,28 @@
     var alreadyAuth =
       path.indexOf('/accounts/') === 0 || path.indexOf('/auth/') === 0;
 
+    var mo = null;              // armed only while the page is UNRESOLVED
+    var forwardResolved = false; // page proven NOT to be the interstitial
+    var lastBodyNonEmpty = false;
+    var lastForwardCheck = 0;
+
     function tryForward() {
       if (window.__slowgramLoginRedirected) { return; }
+      // PERF GUARD (v1.1.1): body.innerText forces full-page layout. The
+      // story editor mutates the DOM dozens of times per second — checking
+      // on EVERY mutation pegged the main thread at >100% CPU and froze
+      // the composer on-device (Pixel 7 Pro). Two defenses:
+      //   1. throttle expensive (non-empty-body) checks to 1 per 500ms;
+      //   2. DISARM once the page resolves as not-an-interstitial: the
+      //      logged-out landing only ever renders on fresh loads, so a
+      //      non-empty body without its copy means we can stop watching.
+      var now = Date.now();
+      if (lastBodyNonEmpty && now - lastForwardCheck < 500) { return; }
+      lastForwardCheck = now;
+
       var bodyText = document.body ? document.body.innerText || '' : '';
+      lastBodyNonEmpty = bodyText.replace(/\s/g, '').length > 0;
+
       // Detection tolerant of how the page splits the copy across elements:
       // 'Entrar ou cadastrar-se' may read as 'Entrar ou cadastrar-se',
       // 'Entrar', 'ou', 'cadastrar-se' (separate links), 'Log in', 'Sign up'.
@@ -129,22 +151,31 @@
         /Abrir Instagram|Open Instagram|Use the app|Usar o app/i.test(bodyText);
       if (isInterstitial && hasOpenAppButton) {
         window.__slowgramLoginRedirected = true;
+        forwardResolved = true;
+        if (mo) { try { mo.disconnect(); } catch (e) {} }
         if (window.console && console.log) {
           console.log('[SlowGram-boot] first-use: forwarded logged-out page to login');
         }
         window.location.replace('https://www.instagram.com/accounts/login/');
+        return;
+      }
+      if (lastBodyNonEmpty) {
+        // Non-empty and not the interstitial: this page is resolved. Stop
+        // watching entirely (fail-soft: worst case a future Meta change
+        // brings back the manual "Entrar ou cadastrar-se" link flow).
+        forwardResolved = true;
+        if (mo) { try { mo.disconnect(); } catch (e) {} }
       }
     }
 
-    // First check immediately, then react to DOM mutations. Bounded: the
-    // observer is disconnected once the forward fires, and the check itself
-    // is cheap (innerText on a small landing page).
+    // First check immediately, then react to DOM mutations WHILE THE PAGE
+    // IS STILL UNRESOLVED (empty body at onPageFinished -> async render).
     tryForward();
-    if (!alreadyAuth && !window.__slowgramLoginRedirected &&
+    if (!alreadyAuth && !window.__slowgramLoginRedirected && !forwardResolved &&
         typeof MutationObserver === 'function') {
-      var mo = new MutationObserver(function () { tryForward(); });
+      mo = new MutationObserver(function () { tryForward(); });
       try { mo.observe(document.body || document.documentElement, {
-        childList: true, subtree: true, characterData: true
+        childList: true, subtree: true
       }); } catch (e) { /* fail-soft */ }
       window.__slowgramInterstitialObserver = mo;
     }

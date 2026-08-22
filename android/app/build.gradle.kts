@@ -118,6 +118,7 @@ dependencies {
     // the ActivityResultLauncher that powers media uploads (DM/feed/stories
     // file inputs). No analytics, no trackers, local-first, auditable.
     implementation(libs.androidx.activity)
+    implementation(libs.androidx.swiperefreshlayout)
 
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)

@@ -28,6 +28,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import java.io.File
 
 /**
@@ -100,6 +101,15 @@ class MainActivity : ComponentActivity() {
                 listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
             }
 
+        /**
+         * Pull-to-refresh is DISABLED on reels routes: a downward swipe on
+         * the first reel would reload the whole page mid-session instead of
+         * being consumed by the pager. Everywhere else the gesture means
+         * "refresh" exactly like a mobile browser.
+         */
+        internal fun pathIsReels(path: String?): Boolean =
+            path != null && path.startsWith("/reels")
+
         /** Intersection of the requested resources with camera/mic (order kept). */
         internal fun webGrantableResources(resources: Array<String>): Array<String> =
             resources.filter { it == PermissionRequest.RESOURCE_VIDEO_CAPTURE ||
@@ -111,6 +121,9 @@ class MainActivity : ComponentActivity() {
     private var entryPathname: String? = null   // route this page load started at
     private var pageLoadCompleted = false       // first onPageFinished per load
     private var backCallback: OnBackInvokedCallback? = null
+
+    /** Wraps the WebView for the browser-style pull-to-refresh gesture. */
+    private lateinit var pullToRefresh: SwipeRefreshLayout
 
     // ---- media uploads (v1.1) ------------------------------------------------
 
@@ -178,9 +191,29 @@ class MainActivity : ComponentActivity() {
                 OnBackInvokedDispatcher.PRIORITY_DEFAULT, backCallback!!
             )
         }
+        // Pull-to-refresh (v1.1.1): mobile browsers refresh from the top;
+        // the WebView host must offer the same affordance because Instagram's
+        // web app has no in-page refresh control. Disabled on /reels* so a
+        // downward swipe on the first reel never reloads mid-session.
+        pullToRefresh = object : SwipeRefreshLayout(this) {
+            override fun canChildScrollUp(): Boolean =
+                super.canChildScrollUp() || MainActivity.pathIsReels(pathnameOf(webView.url))
+        }.apply {
+            addView(
+                webView,
+                ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+            )
+            setOnRefreshListener {
+                Log.d(TAG, "[refresh] pull-to-refresh -> reload")
+                webView.reload()
+            }
+        }
         val root = FrameLayout(this)
         root.addView(
-            webView,
+            pullToRefresh,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -239,6 +272,7 @@ class MainActivity : ComponentActivity() {
                 // Diagnostic (always logged, before the host guard) so on-device
                 // URL/redirect issues are visible in Logcat.
                 Log.d(TAG, "[nav] onPageFinished url=$url viewUrl=${view.url}")
+                pullToRefresh.isRefreshing = false
                 if (injector.isEngineHost(url) || injector.isEngineHost(view.url)) {
                     if (!pageLoadCompleted) {
                         pageLoadCompleted = true

@@ -82,6 +82,30 @@ string congelada: os números de versão acompanham o WebView instalado do
 aparelho; o fallback fixo só entra se a UA do sistema não for Chromium
 (política pura em `UserAgent.kt`, testada por JVM).
 
+**Pull-to-refresh (v1.1.1)** — puxe para baixo no topo para recarregar,
+igual ao navegador mobile (o app web do Instagram não tem controle de
+refresh próprio — sem isso, ver seus próprios stories recém-postados
+exigia fechar e reabrir o app). Desabilitado em `/reels*`: um swipe para
+baixo no primeiro reel nunca recarrega a página no meio da sessão.
+
+### Limitações conhecidas do Instagram Web (NÃO são bugs do wrapper)
+
+Verificado on-device (Pixel 7 Pro, Android 17) reproduzindo o MESMO fluxo
+no Chrome mobile em instagram.com — falha idêntica fora do SlowGram:
+
+- **Story: texto não arrasta** — o listener de touch do composer chama
+  `preventDefault()` dentro de listener passivo (o console inunda de
+  avisos); o texto é digitado mas não reposiciona;
+- **Story: "Carregando..." infinito após postar** — o story É publicado
+  (a notificação do sistema confirma), mas a tela nunca sai do
+  carregando; fechar e reabrir resolve (ou puxe para atualizar);
+- **Sem Close Friends no composer de Stories** — o controle nem renderiza
+  na árvore de acessibilidade da web; é um recurso que a Meta não expõe
+  na versão web.
+
+Corrigir esses itens exigiria remendar a página do Instagram por fora,
+o que viola os princípios do projeto. Reporte à Meta 😉
+
 **Ajustes cosméticos (host, não engine)** — regras CSS injetadas pelo
 wrapper em `android/app/src/main/assets/host-inject.js`, verificadas em
 aparelho (Pixel 7 Pro, 2026-08), todas best-effort (se o Instagram mudar os
