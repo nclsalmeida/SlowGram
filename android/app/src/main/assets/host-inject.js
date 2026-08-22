@@ -332,20 +332,41 @@
       /(n[aã]o foi poss[íi]vel|erro ao|algo deu errado|could[n']t|failed to|unable to).{0,80}(story|compartilh|publicar|postar|criar)/i;
     var lastAnnouncerText = '';
     var lastLifecycleJumpAt = 0;
+    var sgErrScanTick = 0;
 
     setInterval(function () {
       try {
         // Upstream crash recovery (v1.1.2): when instagram.com's own JS
-        // dies (observed right after deleting stories then posting), it
-        // renders a TINY error page ("Ocorreu um erro" + "Recarregar
-        // página"). Auto-reload it, with a session-scoped loop guard (max
-        // 2/minute) so a persistent failure can never become a reload
-        // storm - past that, the manual button stays. Cheap pre-gate: the
-        // text scan runs only when the whole DOM is tiny (<80 nodes;
-        // real feeds have thousands), so normal browsing pays ~nothing.
-        if (document.getElementsByTagName('*').length < 80) {
-          var errText = document.body ? document.body.innerText || '' : '';
-          if (/Ocorreu um erro|n[aã]o foi poss[íi]vel carregar a p[aá]gina|Something went wrong/i.test(errText)) {
+        // dies (observed after deleting stories then posting) it renders
+        // "Ocorreu um erro" + "Recarregar página". Detection walks TEXT
+        // NODES ONLY (TreeWalker) - body.innerText would force a full-page
+        // LAYOUT read, which was the perf bug class we just fixed. The
+        // React shell usually keeps the feed DOM mounted under the error,
+        // so a node-count gate never opens; a text-node walk sees the real
+        // words regardless. Runs every 4th tick (~8s); capped at 4000 text
+        // nodes (a few ms worst case). Requires TWO independent markers
+        // (headline + reload affordance) so stray template strings in a
+        // healthy page can't trigger it. Loop-guarded: max 2 reloads per
+        // minute (sessionStorage) - past that the manual button stays.
+        sgErrScanTick += 1;
+        if (sgErrScanTick % 4 === 0) {
+          var errTxt = '';
+          try {
+            var walker = document.createTreeWalker(
+              document.body || document.documentElement,
+              NodeFilter.SHOW_TEXT, null);
+            var tn;
+            var budget = 4000;
+            while ((tn = walker.nextNode()) && budget-- > 0) {
+              var v = tn.nodeValue;
+              if (v && v.length > 1) { errTxt += v + '\n'; }
+            }
+          } catch (err) { errTxt = ''; }
+          var hitHeadline =
+            /Ocorreu um erro|Something went wrong|n[aã]o foi poss[íi]vel carregar a p[aá]gina/i.test(errTxt);
+          var hitReload =
+            /Recarregar (a )?p[aá]gina|Tente novamente|Reload page|Try again/i.test(errTxt);
+          if (hitHeadline && hitReload) {
             var nowMs = Date.now();
             var lastAt = parseInt(sessionStorage.getItem('sgCrashReloadAt') || '0', 10);
             var count = (nowMs - lastAt > 60000)
