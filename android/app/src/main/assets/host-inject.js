@@ -521,6 +521,9 @@
     var sgVolOrig = new Map();
     var sgMirrorLogged = false;
     var sgReinitDone = false;
+    var sgCapLayer = null;
+    var sgCapFindAt = 0;
+    var sgCapLiftLogged = false;
     setInterval(function () {
       try {
         var el = document.documentElement;
@@ -653,6 +656,79 @@
             }
           }
         }
+        // CAPTION-LAYER LIFT (v1.1.1, surgical): today's organic reels keep
+        // the caption in a floating layer anchored to the viewport bottom -
+        // NOT a child of the snap item - so item padding cannot reach it
+        // (sponsored items use a different template and looked fine). Find
+        // the caption by its own TEXT, climb to its positioning layer and
+        // raise THAT: bottom=93px when bottom-anchored, translateY otherwise.
+        // Found once per page, re-found on detach, re-asserted every tick.
+        try {
+          var capEl = sgCapLayer;
+          if (capEl && !document.contains(capEl)) { capEl = null; sgCapLayer = null; }
+          if (!capEl && Date.now() - sgCapFindAt > 3000) {
+            sgCapFindAt = Date.now();
+            var walker2 = document.createTreeWalker(
+              document.body || document.documentElement,
+              NodeFilter.SHOW_TEXT, null);
+            var tn2;
+            var budget2 = 6000;
+            while ((tn2 = walker2.nextNode()) && budget2-- > 0) {
+              var vv2 = tn2.nodeValue || '';
+              if (/Áudio original|Vídeos do Reels de/.test(vv2)) {
+                var base = tn2.parentElement;
+                var cand = base;
+                var big = base;
+                for (var ci = 0; ci < 8 && big && big !== document.body; ci++) {
+                  try {
+                    if (big.getBoundingClientRect().height > window.innerHeight * 0.55) {
+                      break;
+                    }
+                    cand = big;
+                  } catch (eC) {}
+                  big = big.parentElement;
+                }
+                capEl = cand || base;
+                sgCapLayer = capEl;
+                if (window.console && console.log) {
+                  console.log('[SlowGram-boot] caption layer found <' +
+                    capEl.tagName + ' class=' +
+                    String(capEl.className || '').slice(0, 60) + '>');
+                }
+                break;
+              }
+            }
+          }
+          if (capEl) {
+            var csB = null;
+            try { csB = getComputedStyle(capEl).position; } catch (eD) {}
+            if (csB === 'fixed' || csB === 'absolute') {
+              try {
+                if (capEl.style.bottom !== '93px') {
+                  capEl.style.setProperty('bottom', '93px', 'important');
+                  if (window.console && console.log &&
+                      !sgCapLiftLogged) {
+                    sgCapLiftLogged = true;
+                    console.log('[SlowGram-boot] caption lifted via bottom');
+                  }
+                }
+              } catch (eE) {}
+            } else {
+              try {
+                if (capEl.style.transform !== 'translateY(-93px)') {
+                  capEl.style.setProperty('transform',
+                    'translateY(-93px)', 'important');
+                  if (window.console && console.log &&
+                      !sgCapLiftLogged) {
+                    sgCapLiftLogged = true;
+                    console.log('[SlowGram-boot] caption lifted via translate');
+                  }
+                }
+              } catch (eF) {}
+            }
+          }
+        } catch (errC) { /* fail-soft */ }
+
         // DEGRADATION MIRROR (v1.1.1, testing lever). The engine computes
         // phase from watch time correctly (probe-proven), but lever DELIVERY
         // needs video registration, which the current reels markup starves.
