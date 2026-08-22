@@ -304,6 +304,35 @@
 
     setInterval(function () {
       try {
+        // Upstream crash recovery (v1.1.2): when instagram.com's own JS
+        // dies (observed right after deleting stories then posting), it
+        // renders a TINY error page ("Ocorreu um erro" + "Recarregar
+        // página"). Auto-reload it, with a session-scoped loop guard (max
+        // 2/minute) so a persistent failure can never become a reload
+        // storm - past that, the manual button stays. Cheap pre-gate: the
+        // text scan runs only when the whole DOM is tiny (<80 nodes;
+        // real feeds have thousands), so normal browsing pays ~nothing.
+        if (document.getElementsByTagName('*').length < 80) {
+          var errText = document.body ? document.body.innerText || '' : '';
+          if (/Ocorreu um erro|n[aã]o foi poss[íi]vel carregar a p[aá]gina|Something went wrong/i.test(errText)) {
+            var nowMs = Date.now();
+            var lastAt = parseInt(sessionStorage.getItem('sgCrashReloadAt') || '0', 10);
+            var count = (nowMs - lastAt > 60000)
+              ? 0
+              : parseInt(sessionStorage.getItem('sgCrashReloadCount') || '0', 10);
+            if (count < 2) {
+              sessionStorage.setItem('sgCrashReloadAt', String(nowMs));
+              sessionStorage.setItem('sgCrashReloadCount', String(count + 1));
+              if (window.console && console.log) {
+                console.log('[SlowGram-boot] upstream error page -> auto-reload (' +
+                  (count + 1) + '/2)');
+              }
+              window.location.reload();
+              return;
+            }
+          }
+        }
+
         var live = document.querySelector(
           '[role="status"],[role="alert"],[aria-live]');
         var txt = live ? (live.textContent || '') : '';
