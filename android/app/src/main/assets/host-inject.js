@@ -261,22 +261,33 @@
           var closed = true;
           try { closed = !document.contains(btn); } catch (err) { closed = true; }
           if (!confirmed && !closed) {
-            if (polls >= 40) { clearInterval(timer); }   // hung composer: give up
+            if (polls >= 40) {
+              clearInterval(timer);
+              if (window.console && console.log) {
+                console.log('[SlowGram-boot] story watch gave up (composer hung)');
+              }
+            }
             return;
           }
           clearInterval(timer);
           var p = '';
           try { p = window.location.pathname || ''; } catch (err) {}
-          // Only auto-jump when the user is still on the home/stories
-          // surface — never yank someone who navigated to a profile.
-          if (p === '/' || p.indexOf('/stories') === 0) {
-            try {
-              if (window.console && console.log) {
-                console.log('[SlowGram-boot] story confirmed/closed -> fresh home');
-              }
+          try {
+            // A CONFIRMED post ALWAYS lands on a fresh home - that is the
+            // product promise ("posted -> updated home"), wherever the SPA
+            // happened to route the composer. Close-only (no confirmation)
+            // keeps the conservative surface guard so a stray close never
+            // yanks someone browsing elsewhere.
+            var mayJump = confirmed || p === '/' || p.indexOf('/stories') === 0;
+            if (window.console && console.log) {
+              console.log('[SlowGram-boot] story ' +
+                (confirmed ? 'CONFIRMED' : 'closed') +
+                ' (path=' + p + ')' + (mayJump ? ' -> fresh home' : ' -> staying'));
+            }
+            if (mayJump) {
               window.location.replace(window.location.origin + '/');
-            } catch (err) { /* fail-soft */ }
-          }
+            }
+          } catch (err) { /* fail-soft */ }
         }, 1500);
       } catch (err) { /* never break the page over the guard */ }
     }, true);
@@ -340,16 +351,28 @@
         lastAnnouncerText = txt;
         var flat = txt.replace(/\s+/g, ' ').trim();
 
-        if (STORY_DELETED_LABEL.test(flat) || STORY_FAILED_LABEL.test(flat)) {
+        // Second safety net for SUCCESS: if the click-guard's own poll
+        // somehow missed it, a done-announcement within 3 minutes of a
+        // detected post click still triggers the fresh-home jump (no path
+        // guard - same product promise). Deleted/failed keep the surface
+        // guard so unrelated announcements elsewhere never yank anyone.
+        var doneRecent =
+          Date.now() - lastStoryPostAt < 180000 &&
+          STORY_DONE_LABEL.test(flat);
+        if (doneRecent ||
+            STORY_DELETED_LABEL.test(flat) ||
+            STORY_FAILED_LABEL.test(flat)) {
           var now = Date.now();
           if (now - lastLifecycleJumpAt < 5000) { return; }
           var p = '';
           try { p = window.location.pathname || ''; } catch (err) {}
-          if (!(p === '/' || p.indexOf('/stories') === 0)) { return; }
+          if (!doneRecent &&
+              !(p === '/' || p.indexOf('/stories') === 0)) { return; }
           lastLifecycleJumpAt = now;
           if (window.console && console.log) {
-            console.log('[SlowGram-boot] story deleted/failed -> fresh home (' +
-              flat.slice(0, 80) + ')');
+            console.log('[SlowGram-boot] story lifecycle (' +
+              (doneRecent ? 'success' : 'deleted/failed') +
+              ', path=' + p + ') -> fresh home');
           }
           window.location.replace(window.location.origin + '/');
         }
