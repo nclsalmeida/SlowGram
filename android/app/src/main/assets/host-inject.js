@@ -555,33 +555,44 @@
             if (sgReelVideos.has(node)) { continue; }
             sgReelVideos.add(node);
           }
-          // Climb collecting EVERY full-height ancestor: the innermost fit
-          // is the video's own wrapper, the OUTERMOST fit is the true snap
-          // item the caption anchors to (organic captions live there -
-          // sponsored items carry their own layout and looked fine). Pad
-          // both; the re-assert loop keeps them in place across re-renders.
+          // Climb collecting full-height ancestors, then pad ONLY the true
+          // snap ITEM: height between 72% and 98% of the viewport. The
+          // video's own wrapper measures TALLER than the item (919 vs 826)
+          // - padding it expands content DOWNWARD (auto-height) and shoved
+          // the caption plus the profile handle out of view. The 826px item
+          // is exactly what the original rotated-class CSS used to lift.
           var fits = [];
           var cur2 = node.parentElement;
           for (var d2 = 0; d2 < 10 && cur2 && cur2 !== document.body; d2++) {
             try {
-              if (cur2.clientHeight >= vh * 0.85) { fits.push(cur2); }
+              if (cur2.clientHeight >= vh * 0.6) { fits.push(cur2); }
             } catch (e6) {}
             cur2 = cur2.parentElement;
           }
           if (fits.length) {
-            var padTargets = [fits[0]];
-            if (fits[fits.length - 1] !== fits[0]) {
-              padTargets.push(fits[fits.length - 1]);
+            var vhLo = vh * 0.72;
+            var vhHi = vh * 0.985;
+            var itemT = null;
+            for (var f2 = 0; f2 < fits.length; f2++) {
+              var fh = fits[f2].clientHeight;
+              if (fh >= vhLo && fh <= vhHi) { itemT = fits[f2]; break; }
             }
-            for (var t2 = 0; t2 < padTargets.length; t2++) {
-              var tgt = padTargets[t2];
+            // Clear stale pads from earlier heuristics (dual-pad era)
+            for (var c2 = sgReelPadded.length - 1; c2 >= 0; c2--) {
+              var pel = sgReelPadded[c2];
+              if (pel !== itemT || itemT === null) {
+                try { pel.style.removeProperty('padding-bottom'); } catch (e10) {}
+                sgReelPadded.splice(c2, 1);
+              }
+            }
+            if (itemT) {
               try {
-                tgt.style.setProperty('padding-bottom', '93px', 'important');
-                if (sgReelPadded.indexOf(tgt) === -1) { sgReelPadded.push(tgt); }
+                itemT.style.setProperty('padding-bottom', '93px', 'important');
+                if (sgReelPadded.indexOf(itemT) === -1) { sgReelPadded.push(itemT); }
                 if (window.console && console.log) {
-                  console.log('[SlowGram-boot] reels lift on <' + tgt.tagName +
-                    ' class=' + String(tgt.className || '').slice(0, 70) +
-                    ' h=' + tgt.clientHeight + '> fit#' + t2);
+                  console.log('[SlowGram-boot] reels lift on <' + itemT.tagName +
+                    ' class=' + String(itemT.className || '').slice(0, 70) +
+                    ' h=' + itemT.clientHeight + '> (snap item)');
                 }
               } catch (e7) {}
             }
@@ -601,9 +612,8 @@
                 if (dlgs[di].contains(node)) { hasDlg = true; break; }
               }
             } catch (e8) {}
-            if (!hasDlg) {
-              var cont = fits[fits.length - 1].parentElement ||
-                fits[fits.length - 1];
+            if (!hasDlg && itemT) {
+              var cont = itemT.parentElement || itemT;
               if (cont && cont !== document.body &&
                   typeof cont.setAttribute === 'function' &&
                   cont.getAttribute('role') !== 'dialog') {
