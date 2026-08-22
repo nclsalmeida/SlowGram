@@ -102,6 +102,17 @@
     function syncReelsShim() {
       var p = '';
       try { p = window.location.pathname || ''; } catch (e) {}
+      // ENGINE CONTRACT: classifyPathname only accepts '/reels/' WITH the
+      // trailing slash (reelsPrefix). Bare '/reels' classifies UNKNOWN and
+      // the degradation clock never runs. Normalize the address bar - the
+      // wrapped replaceState chains into the engine's RouteGuard, which
+      // re-classifies instantly. Instagram treats both forms identically.
+      if (p === '/reels') {
+        try {
+          window.history.replaceState(null, '', '/reels/');
+          p = '/reels/';
+        } catch (e) { /* keep host-side gating alive regardless */ }
+      }
       var el = document.documentElement;
       if (!el || typeof el.setAttribute !== 'function') { return; }
       if (p.indexOf('/reels') === 0) {
@@ -494,14 +505,13 @@
     var sgReelVideos = (typeof WeakSet === 'function') ? new WeakSet() : null;
     var sgReelPadded = [];
     var sgReelProbeLogged = false;
+    var sgStateProbeAt = 0;
     setInterval(function () {
       try {
         var el = document.documentElement;
         if (!el || el.getAttribute('data-sg-reels') !== '1') { return; }
         var vids = document.querySelectorAll('video');
         if (!vids.length) { return; }
-        if (!sgReelPadded.length && vids.length &&
-            sgReelVideos && sgReelVideos.has(vids[0])) { return; }
         if (!sgReelProbeLogged && window.console && console.log) {
           sgReelProbeLogged = true;
           var chain = [];
@@ -513,11 +523,13 @@
           }
           console.log('[SlowGram-boot] reels probe: ' + chain.join(' < '));
         }
-        // cheap re-assert of already-padded items (no layout reads)
+        // cheap re-assert of already-padded items (no layout reads);
+        // IMPORTANT priority so author-level !important rules lose
         for (var j = 0; j < sgReelPadded.length; j++) {
           try {
             if (sgReelPadded[j].style.paddingBottom !== '93px') {
-              sgReelPadded[j].style.paddingBottom = '93px';
+              sgReelPadded[j].style.setProperty(
+                'padding-bottom', '93px', 'important');
             }
           } catch (e2) {}
         }
@@ -535,12 +547,27 @@
             cur2 = cur2.parentElement;
           }
           if (target) {
-            target.style.paddingBottom = '93px';
+            target.style.setProperty('padding-bottom', '93px', 'important');
             sgReelPadded.push(target);
             if (window.console && console.log) {
               console.log('[SlowGram-boot] reels caption lift applied (geometric)');
             }
           }
+        }
+        // Engine state probe: every ~10s on the reels surface, expose
+        // exactly where the degradation pipeline stands (context, running,
+        // phase, elapsed) - turns "not degrading" into a pinpointed stage.
+        var nowP = Date.now();
+        if (!sgStateProbeAt || nowP - sgStateProbeAt > 10000) {
+          sgStateProbeAt = nowP;
+          try {
+            if (window.SlowGram && typeof window.SlowGram.getState === 'function') {
+              var st = window.SlowGram.getState();
+              console.log('[SlowGram-boot] engine: ctx=' + st.context +
+                ' run=' + st.running + ' phase=' + st.phase +
+                ' elapsed=' + Math.round(st.elapsedMs) + 'ms');
+            }
+          } catch (e3) {}
         }
       } catch (err) { /* fail-soft */ }
     }, 2000);
