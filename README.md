@@ -3,6 +3,14 @@
 > Not affiliated with, associated with, authorized by, or sponsored by Meta
 > Platforms, Inc. or Instagram. Instagram is a trademark of Meta Platforms, Inc.
 
+> **Estado atual:** release **v1.1.1** publicada (tag `v1.1.1`). O master
+> segue à frente dela como `1.1.2-dev` (versionCode 4): cura da observação
+> dos reels (âncora `role=dialog` + re-init do observador), espelho de
+> degradação guiado por fase, levantamento cirúrgico da legenda de reels
+> (**em validação on-device**) e catálogo de diagnóstico em Logcat. A
+> alavanca de teste `SG_FAST_REELS` está **ATIVA** neste estado — ver
+> "Alavanca de teste" abaixo.
+
 ## O que é
 
 **SlowGram** é um experimento open-source contra o consumo compulsivo de Reels.
@@ -35,10 +43,20 @@ real de Reels visível. A degradação escala em fases:
 Tudo reverte instantaneamente fora dos Reels, e o relógio **nunca conta tempo
 oculto** (background ≥ 5 min zera a sessão — o engine não te engana).
 
+**Entrega em duas vias (v1.1.2-dev):** as alavancas oficiais do engine
+aplicam-se aos vídeos REGISTRADOS pelo observador dele — e o markup atual de
+`instagram.com/reels` dificulta isso (sem `[role=main]`, vídeos fora das
+raízes observadas; diagnosticado por sonda: `registry=1` vs `videos=13`).
+O host hoje (a) planta `role="dialog"` no contêiner dos itens e re-executa
+`init()` uma vez para o observador enxergar as duas raízes, e (b) mantém um
+**espelho** guiado por `getState().phase` que aplica os MESMOS valores de
+`getConfig()` direto nos vídeos montados. Motor continua autoritativo —
+valores idênticos tornam as escritas idempotentes.
+
 O engine é validado por uma suíte própria de **930 assertions** no Node
 (`test/slowgram.test.js`; **851 no harness de browser** — mesma suíte, zero
 dependências), mais o E2E do boot do host (**18/18**) e os testes JVM do
-wrapper (**31**, nas variantes debug e release), incluindo verificação em
+wrapper (**33**, nas variantes debug e release), incluindo verificação em
 dispositivo real (ver "Validação em dispositivo").
 
 ## Android
@@ -69,7 +87,7 @@ completo de mídia do Instagram Web:
   `onPermissionRequest`, que concede SOMENTE recursos mapeados
   (câmera/microfone) e somente com a permissão Android correspondente já
   concedida — recurso desconhecido nunca é concedido;
-- **permissões pedidas na hora do uso, nunca antes**: `CAMERa`,
+- **permissões pedidas na hora do uso, nunca antes**: `CAMERA`,
   `READ_MEDIA_IMAGES`/`READ_MEDIA_VIDEO` (API 33+) ou
   `READ_EXTERNAL_STORAGE` (maxSdk 32). Recusar não quebra nada: o seletor
   SAF é permission-free — negar só esconde as fontes de captura até conceder;
@@ -106,28 +124,47 @@ no Chrome mobile em instagram.com — falha idêntica fora do SlowGram:
 Corrigir esses itens exigiria remendar a página do Instagram por fora,
 o que viola os princípios do projeto. Reporte à Meta 😉
 
-**Alavanca de teste — relógio de degradação acelerado (ATIVA no
-dispositivo do mantenedor)** — `SG_FAST_REELS` no boot usa o seam público
-`init({clock})` com relógio 60×: os limites de fase `[3,7,12] min`
-elapsam em `[3,7,12] s` de reels assistido — degradação máxima em menos
-de um minuto. Desligar com `localStorage.sgFastReels='0'` ou trocando a
-constante. **OBRIGATÓRIO voltar para `false` antes de qualquer tag de
-release.**
+### Alavanca de teste — ATIVA neste estado (desligar antes de release!)
 
-**Proteções de Stories (v1.1.1)** — como o composer não dá nenhum
-feedback após postar (bug upstream acima), o wrapper adiciona duas
-salvaguardas próprias, ambas *fail-soft* e baseadas no rótulo do botão
-(PT/EN/ES — se a Meta mudar o texto, o comportamento original volta):
+`SG_FAST_REELS = true` no boot (`host-inject.js`) arma DUAS coisas:
 
-- **Anti-duplicado**: toque em "Adicionar ao seu story" é capturado; os
-  seguintes, por 20s, são ignorados (mata o duplo-toque e o spam de
+1. **Relógio 60×** via o seam público `SlowGram.init({clock})`: os limites
+   de fase `[3,7,12] min` elapsam em `[3,7,12] s` de reels assistido —
+   degradação máxima em menos de um minuto;
+2. **Espelho de degradação** no host: aplica os valores da fase direto nos
+   vídeos montados (ver "Entrega em duas vias" acima).
+
+Desligar: `SG_FAST_REELS = false` no arquivo ou
+`localStorage.sgFastReels='0'` no aparelho.
+
+> ⚠️ **OBRIGATÓRIO voltar para `false` antes de qualquer tag de release** —
+> a timeline de pesquisa ([3,7,12] min) é contrato do projeto (RESEARCH.md
+> FA-03/FA-07). Com a alavanca ativa, pausas >5s fora dos reels também zera
+> a sessão (janela de fadiga comprimida junto).
+
+**Proteções de Stories (v1.1.1+)** — como o composer não dá nenhum feedback
+após postar (bug upstream acima), o wrapper mantém uma cadeia de
+salvaguardas *fail-soft*, baseadas no rótulo dos botões (PT/EN/ES — se a
+Meta mudar os textos, o comportamento original volta):
+
+- **Anti-duplicado**: toque em "Adicionar ao seu story" capturado na fase de
+  captura; os seguintes, por 20s, são ignorados (mata duplo-toque e spam de
   impaciência durante a janela morta de upload);
-- **Auto-retorno à home**: na confirmação da postagem (o aviso que
-  desliza na parte de baixo — região `aria-live` da página) ou no
-  fechamento do composer, o que vier primeiro, o wrapper recarrega uma
-  home fresca — seus stories já aparecem. Nunca interrompe um upload em
-  andamento e desiste em silêncio após ~60s se o composer travar
-  (upstream).
+- **Auto-retorno à home na CONFIRMAÇÃO**: detectado o anúncio de sucesso da
+  página ("Seu story foi adicionado ao Instagram" — região `aria-live`),
+  pula para uma home FRESCA incondicionalmente, sem diálogo de navegação
+  (o guard `beforeunload` do composer é silenciado só nos pulos do wrapper);
+- **Fallbacks do auto-retorno**: fechamento do composer (com guarda de
+  superfície / e /stories*) ou ~60s de compositor travado → desiste sem
+  atrapalhar; nunca interrompe upload em andamento;
+- **Exclusão → home fresca**: clique em "Excluir/Descartar/Delete" dentro
+  de `/stories*` recarrega a home em ~3s — cura o anel fantasma da bandeja
+  E o estado podre do composer que fazia o próximo post falhar;
+- **Falha de post → home fresca**: anúncios de erro redefinem o estado;
+- **Auto-recuperação de crash**: se o JS do Instagram morrer na tela
+  "Ocorreu um erro", o boot detecta (varredura de nós de texto, dois
+  marcadores exigidos) e recarrega sozinho — máx. 2 recargas/minuto
+  (sessionStorage); passou disso, o botão manual deles permanece.
 
 **Ajustes cosméticos (host, não engine)** — regras CSS injetadas pelo
 wrapper em `android/app/src/main/assets/host-inject.js`, verificadas em
@@ -137,18 +174,22 @@ seletores, o comportamento original volta sem quebrar nada):
 - força o wordmark do Instagram a renderizar branco
   (`i[aria-label="Instagram"]` + `filter: brightness(0) invert(1)`) — o
   sprite preto fica quase invisível na tela de login escura;
-- nos Reels, mantém a legenda inteira acima da bottom nav
-  (`div[class*="xpqajaz"][class*="xtijo5x"]` + `padding-bottom`) — o item
-  de cada reel tem exatamente a altura do viewport e a nav fixa (73px)
-  cobria as últimas linhas da legenda ("… mais", "Áudio original") e
-  roubava o toque do "mais" (a aba Reels da nav ficava por cima). Com o
-  padding, o bloco da legenda sobe e o toque em qualquer parte dela
-  expande o texto normalmente. Como a Meta ROTACIONA esses nomes ofuscados,
-  existe um fallback geométrico classe-independente: a cada novo `<video>`
-  no surface de reels, sobe pelos ancestrais até o item snap de altura
-  cheia e aplica o padding inline (reafirmado a cada tique, pois o React
-  limpa estilos). Um probe loga a cadeia de classes do vídeo uma vez por
-  página para re-pinçar o seletor CSS direto do Logcat.
+- nos Reels, mantém a legenda inteira acima da bottom nav. **Estado
+  v1.1.2-dev: EM DEPURAÇÃO** — a Meta rotacionou os nomes de classe
+  ofuscados que o seletor CSS original usava (`xpqajaz`+`xtijo5x`), e o
+  markup novo tirou `[role=main]` e moveu a legenda para uma camada
+  flutuante fora do item. O mecanismo atual tem três camadas: (1) o CSS
+  antigo permanece (inofensivo quando os nomes voltam); (2) fallback
+  geométrico classe-independente — a cada novo `<video>`, sobe pelos
+  ancestrais até o item snap cuja altura fica na faixa 72–98% do viewport
+  (o item de ~826px da era do fix original) e aplica `padding-bottom:
+  93px !important` inline, reafirmado a cada tique; (3) levantamento
+  cirúrgico da CAMADA da legenda: localizada pelo próprio texto ("Áudio
+  original" / "Vídeos do Reels de"), sobe ao ancestral comum mais profundo
+  dos marcadores e aplica `bottom: 93px` ou `translateY(-93px)`
+  conforme a ancoragem. **Última rodada on-device ainda não confirmou o
+  resultado visual** — próximos passos: ler a geometria logada
+  (`caption block ... h/bottom/pos`) e calibrar o alvo.
 
 **Configurações e privacidade:** a tela (privacidade + sobre + GitHub +
 aviso não-afiliado) é acessada por **atalho do launcher** — pressione e
@@ -165,6 +206,38 @@ Como o Instagram usa rotas SPA (pushState), invisíveis para
    voltar fecha o app normalmente).
 Validado no Pixel 7 Pro: voltar de uma DM retorna ao feed, voltar do feed
 fecha o app.
+
+## Diagnóstico em Logcat (tag `SlowGram`)
+
+Tudo que o wrapper faz de interessante aparece na tag `SlowGram` (D),
+inclusive em builds release. Filtrar:
+
+```powershell
+adb logcat | Select-String "SlowGram:"   # ou: adb logcat -s SlowGram
+```
+
+| Linha | Significado |
+|---|---|
+| `[nav] decide/onPageFinished url=...` | cada navegação real e a URL final |
+| `[upload] file chooser requested mode=N` | seletor de mídia aberto pela página |
+| `[refresh] pull-to-refresh -> reload` | gesto de puxar-para-atualizar |
+| `story post detected` | 1º toque em "Adicionar ao seu story" |
+| `story post debounced (cooldown)` | toque extra ignorado (janela de 20s) |
+| `live region: <texto>` | anúncio da página capturado (confirmação/exclusão/erro) |
+| `story CONFIRMED (path=...) -> fresh home` | post confirmado → pulo pra home |
+| `story lifecycle (deleted/failed) -> fresh home` | exclusão ou falha → home fresca |
+| `jumping -> fresh home` | navegação automática executada |
+| `upstream error page -> auto-reload (n/2)` | tela "Ocorreu um erro" recuperada sozinha |
+| `reels probe: <classes>` | cadeia de classes atuais ao redor do vídeo (1×/página) |
+| `reels lift on <tag class h>` | item snap que recebeu o padding da legenda |
+| `caption block ... h/bottom/pos` | geometria do bloco da legenda encontrado |
+| `caption lifted via bottom/translate` | camada da legenda erguida (e como) |
+| `mirror: phase N -> sat/rate/vol` | espelho aplicando alavancas da fase N |
+| `engine: ctx= run= phase= elapsed= registry= videos=` | estado interno do engine + contadores de registro/filtro |
+
+Estas linhas foram a base de TODA a depuração on-device desta sessão
+(registry vs videos revelou o observador sem raiz; o live region revelou o
+texto exato "Seu story foi adicionado ao Instagram").
 
 ## Instalação
 
@@ -351,14 +424,30 @@ Níveis de validação usados neste projeto (nunca confundir um com o outro):
 - **iOS** — os clamps WebKit são spec, não validação em superfície real.
 - **CPU < 1%** do observer: estimativa estrutural (yield-at-cap 200/frame,
   síntese 5k mutações/s no harness), **não medida** em aparelho.
-- **Uploads de mídia / câmera / WebRTC em aparelho** (v1.1): cobertos por
-  testes JVM de política (chooser, permissões, mime-types); falta o checklist
-  on-device — seletor abrindo do anexo da DM, captura de câmera, grant/deny
-  das permissões, UA servindo a experiência web completa.
+- **Legenda dos reels orgânicos** — lift cirúrgico implementado
+  (`e01540f`+`6887108`), resultado visual AINDA NÃO confirmado pelo
+  mantenedor (sessão encerrada na validação).
 - **Smoke TH4** (harness no Edge headless): env-gated — nesta sessão o
   `msedge.exe` do host está inerte (não emite dump nem para um
   `data:text/html`), então o item exige uma sessão com browser funcional.
   Não é regressão do engine (927/928 asserts passam; o 1 falho é o TH4).
+
+### Sessão de validação v1.1.2-dev (Pixel 7 Pro via adb, 2026-08)
+
+Itens CONFIRMADOS on-device pelo mantenedor nesta rodada:
+
+- ✅ Postagem de story sem duplicatas (anti-duplicado de 20s);
+- ✅ Auto-retorno à home fresca após a confirmação do post (~10s pós-toque);
+- ✅ Anti-travamento: observador de interstício throttled/desarmado (CPU
+  normalizada);
+- ✅ Pull-to-refresh funcional e isento em /reels*;
+- ✅ Exclusão de stories → home fresca automática; postar após excluir sem
+  erro;
+- ✅ Auto-recuperação da tela "Ocorreu um erro" do Instagram;
+- ✅ Degradação de reels visível end-to-end no modo acelerado (espelho +
+  motor: registry 13-14 vídeos, todos filtrados, fases 0→3);
+- ⏳ Legenda dos reels orgânicos — mecanismo implementado, confirmação
+  visual pendente (ver "Ajustes cosméticos").
 
 ## Testes — níveis (importante)
 
