@@ -36,6 +36,11 @@
    *    `xpqajaz`+`xtijo5x` matches exactly the 9 loaded reel items (all
    *    826px tall); `xtijo5x` alone also hits 93px video wrappers and
    *    `xpqajaz` alone also hits the caption blocks, so BOTH must match.
+   *    ROUTE-SCOPED (v1.1.1): Instagram REUSES these obfuscated classes on
+   *    other surfaces — on-device, the story composer matched and the ghost
+   *    93px padding desynced touch targets from visuals (story text could
+   *    be typed but never dragged). The rule therefore only applies while
+   *    html[data-sg-reels="1"], flipped by the SPA route watch below.
    *
    * 4. First-use experience: Instagram's logged-out landing page (the
    *    "Compartilhe momentos…" interstitial with an "Abrir Instagram"
@@ -52,8 +57,51 @@
     style.textContent =
       'div._acc8._abpk { display: none !important; }\n' +
       'i[aria-label="Instagram"] { filter: brightness(0) invert(1); }\n' +
-      'div[class*="xpqajaz"][class*="xtijo5x"] { padding-bottom: 93px !important; }';
+      'html[data-sg-reels="1"] div[class*="xpqajaz"][class*="xtijo5x"] ' +
+        '{ padding-bottom: 93px !important; }';
     (document.head || document.documentElement).appendChild(style);
+  } catch (e) { /* cosmetic only */ }
+
+  // 3b. Reels-shim routing: flip html[data-sg-reels] as the SPA navigates,
+  //     so the caption-lift padding exists ONLY on /reels*. Instagram
+  //     routes via pushState/replaceState (invisible to popstate alone),
+  //     so both history wrappers are hooked here too. The ENGINE already
+  //     wraps pushState for its RouteGuard — this boot runs after the
+  //     engine, so wrapping again simply chains: every navigation fires
+  //     engine first, host second. Fail-soft everywhere: any error leaves
+  //     the last known state (worst case, the old pre-scoping behavior).
+  try {
+    function syncReelsShim() {
+      var p = '';
+      try { p = window.location.pathname || ''; } catch (e) {}
+      var el = document.documentElement;
+      if (!el || typeof el.setAttribute !== 'function') { return; }
+      if (p.indexOf('/reels') === 0) {
+        el.setAttribute('data-sg-reels', '1');
+      } else if (typeof el.removeAttribute === 'function') {
+        el.removeAttribute('data-sg-reels');
+      }
+    }
+    var hist = window.history;
+    if (hist) {
+      ['pushState', 'replaceState'].forEach(function (name) {
+        var orig = hist[name];
+        if (typeof orig !== 'function') { return; }
+        try {
+          hist[name] = function () {
+            var r = orig.apply(hist, arguments);
+            try { syncReelsShim(); } catch (e) {}
+            return r;
+          };
+        } catch (e) { /* stay unhooked rather than break navigation */ }
+      });
+    }
+    if (typeof window.addEventListener === 'function') {
+      window.addEventListener('popstate', function () {
+        try { syncReelsShim(); } catch (e) {}
+      });
+    }
+    syncReelsShim();
   } catch (e) { /* cosmetic only */ }
 
   // 4. First-use: auto-forward the logged-out interstitial to the login
